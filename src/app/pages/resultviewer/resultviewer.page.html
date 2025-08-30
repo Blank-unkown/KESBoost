@@ -18,25 +18,58 @@
     <h3>Score: {{ result.score }} / {{ result.total }}</h3>
     <p>Date: {{ result.timestamp | date: 'short' }}</p>
 
-    <h3>Answers:</h3>
-    <ol>
-      <li *ngFor="let ans of result.answers; let i = index">
-        Q{{ i + 1 }}: {{ ans || 'No answer' }}
-      </li>
-    </ol>
+    <!-- ✅ TOS Row Cards -->
+    <ion-card *ngFor="let row of tosRowView; let i = index">
+      <ion-card-header>
+        <ion-card-title>Topic {{ i+1 }}: {{ row.topic }}</ion-card-title>
+        <ion-card-subtitle>{{ row.competency }} ({{ row.percent }}%)</ion-card-subtitle>
+      </ion-card-header>
+      <ion-card-content>
+        <p><strong>Expected Items:</strong> {{ row.expectedItems }}</p>
+        <p>
+          <strong>Cognitive:</strong>
+          <span *ngFor="let cog of row.cognitives">
+            {{ cog.level | titlecase }} = {{ cog.count }}
+          </span>
+        </p>
 
-    <div *ngIf="cognitiveBreakdown">
-      <h3>Cognitive Breakdown</h3>
-      <ion-list>
-        <ion-item *ngFor="let level of getBreakdownKeys()">
-          <ion-label>
-            {{ level }}
-            <p>{{ cognitiveBreakdown[level].correct }} / {{ cognitiveBreakdown[level].total }}</p>
-          </ion-label>
-        </ion-item>
-      </ion-list>
+        <!-- ✅ Row Performance -->
+        <p>
+          <strong>Performance:</strong>
+          {{ row.rowCorrect }} / {{ row.rowTotal }}
+          ({{ row.performance }})
+        </p>
 
-      <canvas id="cognitiveChart" height="300"></canvas>
+        <!-- ✅ Item Breakdown -->
+        <div class="questions">
+          <h4>Items:</h4>
+          <ul>
+            <li *ngFor="let q of row.questions">
+              Q{{ q.qNum }} → Selected: {{ q.selected }} | Correct: {{ q.correct }}
+              <span [style.color]="q.isCorrect ? 'green' : 'red'">
+                ({{ q.isCorrect ? '✔' : '✘' }})
+              </span>
+            </li>
+          </ul>
+        </div>
+      </ion-card-content>
+    </ion-card>
+
+    <!-- ✅ Charts Section -->
+    <div>
+      <h3>Analysis</h3>
+
+      <h4>Answer Distribution</h4>
+      <canvas id="answersChart"></canvas>
+
+      <h4>Cognitive Breakdown</h4>
+      <canvas id="cognitiveChart"></canvas>
+
+      <h4>Topic Breakdown</h4>
+      <canvas id="topicChart"></canvas>
+
+      <h4>Competency Breakdown</h4>
+      <canvas id="competencyChart"></canvas>
     </div>
 
     <ion-button expand="full" color="tertiary" (click)="printPage()">🖨️ Print Result</ion-button>

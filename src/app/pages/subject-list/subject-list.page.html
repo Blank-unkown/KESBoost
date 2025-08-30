@@ -8,32 +8,89 @@
 </ion-header>
 
 <ion-content class="ion-padding">
+  <!-- Add Subject -->
   <ion-input [(ngModel)]="subjectName" placeholder="Enter subject name"></ion-input>
   <ion-button expand="full" (click)="addSubject()">Add Subject</ion-button>
 
+  <!-- Subject List -->
   <ion-list>
-    <ion-item *ngFor="let sub of subjects" (click)="goToTOS(sub.id)">
-      {{ sub.name }}
+    <ion-item *ngFor="let sub of subjects">
+      <ion-label (click)="goToTOS(sub.id)">
+        {{ sub.name }}
+      </ion-label>
+      <ion-button slot="end" fill="outline" (click)="goToScannedResults(sub.id)">
+        View Students
+      </ion-button>
+      <ion-button slot="end" fill="outline" color="secondary" (click)="toggleAnalysis()"
+                  *ngIf="results.length > 0 && subjectId === sub.id">
+        {{ showAnalysis ? 'Hide Analysis' : 'Show Analysis' }}
+      </ion-button>
+      <ion-button slot="end" color="danger" (click)="deleteSubject(sub.id)">
+        Delete
+      </ion-button>
     </ion-item>
   </ion-list>
+   
 
-  <ion-list>
-  <ion-item *ngFor="let sub of subjects">
-    <ion-label (click)="goToTOS(sub.id)">
-      {{ sub.name }}
-    </ion-label>
-    <ion-button slot="end" fill="outline" (click)="goToScannedResults(sub.id)">
-      View Scans
-    </ion-button>
-  </ion-item>
-</ion-list>
+  <!-- Student Results -->
+  <ion-card *ngFor="let scan of results">
+    <img [src]="scan.headerImage" style="width: 100%; height: auto;" />
+    <ion-card-header>
+      <ion-card-title>Score: {{ scan.score }}/{{ scan.total }}</ion-card-title>
+      <ion-card-subtitle>{{ scan.timestamp | date: 'short' }}</ion-card-subtitle>
+    </ion-card-header>
+    <ion-card-content>
+      <ion-button expand="full" (click)="viewScan(scan)">View</ion-button>
+      <ion-button expand="full" color="danger" (click)="deleteScan(scan.id)">Delete</ion-button>
+    </ion-card-content>
+  </ion-card>
 
-<ion-card *ngFor="let scan of scanResults" (click)="viewScan(scan)">
-  <img [src]="scan.headerImage" style="width: 100%; height: auto;" />
-  <ion-card-header>
-    <ion-card-title>Score: {{ scan.score }}/{{ scan.total }}</ion-card-title>
-    <ion-card-subtitle>{{ scan.timestamp | date: 'short' }}</ion-card-subtitle>
-  </ion-card-header>
-</ion-card>
+  <!-- ✅ Subject Analysis -->
+  <ion-card *ngIf="showAnalysis">
+    <ion-card-header>
+      <ion-card-title>📊 Subject Analysis</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <p><strong>Mean Score:</strong> {{ meanPercentage | number:'1.0-2' }}%</p>
 
+      <!-- 🔹 Score Distribution -->
+      <h4>Score Distribution</h4>
+      <ion-list>
+        <ion-item *ngFor="let dist of scoreDistribution">
+          <ion-label>{{ dist.range }}</ion-label>
+          <ion-badge color="primary">{{ dist.count }}</ion-badge>
+        </ion-item>
+      </ion-list>
+
+      <!-- 🔹 Score Distribution -->
+      <h4>Score Distribution</h4>
+      <canvas id="scoreChart" height="300"></canvas>
+
+      <!-- 🔹 Aggregated Answer Distribution -->
+      <h4>Answer Distribution</h4>
+      <canvas id="aggAnswersChart" height="300"></canvas>
+
+      <!-- 🔹 Competency Breakdown -->
+      <h4>Competency Breakdown</h4>
+      <ion-list>
+        <ion-item *ngFor="let key of (competencyBreakdown | keyvalue)">
+          <ion-label>
+            {{ key.key }}
+            <br />
+            <small>
+              {{ key.value.correct }}/{{ key.value.total }} correct
+              ({{ (key.value.correct / key.value.total * 100) | number:'1.0-0' }}%)
+            </small>
+          </ion-label>
+        </ion-item>
+      </ion-list>
+      <!-- 🔹 Competency Breakdown -->
+      <h4>Competency Breakdown</h4>
+      <canvas id="competencyChart" height="300"></canvas>
+
+      <!-- 🔹 Aggregated Cognitive Breakdown -->
+      <h4>Cognitive Breakdown</h4>
+      <canvas id="aggCognitiveChart" height="300"></canvas>
+    </ion-card-content>
+  </ion-card>
 </ion-content>

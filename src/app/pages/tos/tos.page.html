@@ -128,7 +128,16 @@
   <!-- 🧾 Answer Sheet Generator Mode -->
   <div *ngIf="viewMode === 'answersheet'">
     <h2 style="text-align: center;">Auto-Generated Answer Sheet</h2>
+    <ion-button expand="block" color="tertiary"
+      [routerLink]="['/answer-key', classId, subjectId]">
+      🧠 Set Answer Key
+    </ion-button>
 
+    <ion-button expand="block" color="primary"
+      [routerLink]="['/scan']"
+      [queryParams]="{ classId: classId, subjectId: subjectId }">
+      📷 Start Scanning
+    </ion-button>
     <div style="
       height: calc(100vh - 300px);
       overflow-y: auto;
@@ -141,19 +150,5 @@
         [subjectId]="subjectId">
       </app-answer-sheet-generator>
     </div>
-
-
-    <ion-button expand="block" color="tertiary"
-      [routerLink]="['/answer-key', classId, subjectId]">
-      🧠 Set Answer Key
-    </ion-button>
-
-    <ion-button expand="block" color="primary"
-      [routerLink]="['/scan']"
-      [queryParams]="{ classId: classId, subjectId: subjectId }">
-      📷 Start Scanning
-    </ion-button>
   </div>
-
-
 </ion-content>

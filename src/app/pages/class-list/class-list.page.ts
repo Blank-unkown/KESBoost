@@ -29,4 +29,11 @@ export class ClassListPage {
   goToSubjects(classId: number) {
     this.navCtrl.navigateForward(`/subject-list/${classId}`);
   }
+
+  deleteClass(classId: number) {
+    if (confirm('Are you sure you want to delete this class?')) {
+      LocalDataService.deleteClass(classId);
+      this.classes = LocalDataService.getClasses(); // refresh list
+    }
+  }
 }

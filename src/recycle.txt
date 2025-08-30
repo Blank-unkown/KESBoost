@@ -1,0 +1,134 @@
+    // ✅ NEW: Validate ZipGrade-style 10x10 binary grid
+    const gridX = 575, gridY = 45, gridSize = 120; // top-right area
+    const cellSize = gridSize / 10;
+    const authRegion = dst.roi(new cv.Rect(gridX, gridY, gridSize, gridSize));
+    const binaryGrid: number[] = [];
+
+    for (let row = 0; row < 10; row++) {
+      for (let col = 0; col < 10; col++) {
+        const cellX = col * cellSize;
+        const cellY = row * cellSize;
+        const cell = authRegion.roi(new cv.Rect(cellX, cellY, cellSize, cellSize));
+        const meanScalar = cv.mean(cell);
+        const brightness = meanScalar[0]; // Grayscale
+        binaryGrid.push(brightness < 127 ? 1 : 0); // Dark = 1
+        cell.delete();
+      }
+    }
+    authRegion.delete();
+
+        const VALID_AUTH_PATTERN = [
+      1,0,1,0,1,0,1,0,1,0,
+      0,1,0,1,0,1,0,1,0,1,
+      1,1,1,1,0,0,0,0,1,1,
+      0,0,0,0,1,1,0,0,1,1,
+      0,0,1,1,0,0,1,1,1,1,
+      1,1,1,1,1,1,0,0,0,0,
+      0,0,0,0,1,0,1,1,0,0,
+      1,1,0,0,1,0,0,1,1,0,
+      0,0,0,0,0,0,0,0,1,0,
+      1,1,0,0,0,1,0,0,0,1,
+    ];
+
+    const isMatch = VALID_AUTH_PATTERN.every((bit, idx) => bit === binaryGrid[idx]);
+    if (!isMatch) {
+      alert('🚫 Invalid or missing authentication pattern. Please use an official answer sheet.');
+      return;
+    }
+
+
+ SECOND ONE
+
+ 
+        // 🔐 AUTHENTICATION GRID (10x10, 12px cells, tolerance 3)
+const gridX = 575, gridY = 45, cellSize = 12;
+const authRegion = dst.roi(new cv.Rect(gridX, gridY, cellSize * 10, cellSize * 10));
+const binaryGrid: number[] = [];
+
+for (let row = 0; row < 10; row++) {
+  for (let col = 0; col < 10; col++) {
+    const cellX = col * cellSize;
+    const cellY = row * cellSize;
+    const cell = authRegion.roi(new cv.Rect(cellX, cellY, 10, 10));
+    const meanScalar = cv.mean(cell);
+    binaryGrid.push(meanScalar[0] < 127 ? 1 : 0);
+    cell.delete();
+  }
+}
+authRegion.delete();
+
+const VALID_AUTH_PATTERN = [
+  1,0,1,0,1,0,1,0,1,0,
+  0,1,0,1,0,1,0,1,0,1,
+  1,1,1,1,0,0,0,0,1,1,
+  0,0,0,0,1,1,0,0,1,1,
+  0,0,1,1,0,0,1,1,1,1,
+  1,1,1,1,1,1,0,0,0,0,
+  0,0,0,0,1,0,1,1,0,0,
+  1,1,0,0,1,0,0,1,1,0,
+  0,0,0,0,0,0,0,0,1,0,
+  1,1,0,0,0,1,0,0,0,1,
+];
+
+let mismatches = 0;
+
+// 👁️ Draw visual feedback (green for match, red for mismatch)
+const overlayCtx = canvas.getContext('2d');
+if (overlayCtx) {
+  overlayCtx.strokeStyle = 'red';
+  overlayCtx.lineWidth = 3;
+  overlayCtx.strokeRect(gridX, gridY, cellSize * 10, cellSize * 10);
+
+  for (let row = 0; row < 10; row++) {
+    for (let col = 0; col < 10; col++) {
+      const i = row * 10 + col;
+      const match = binaryGrid[i] === VALID_AUTH_PATTERN[i];
+      if (!match) mismatches++;
+
+      overlayCtx.fillStyle = match ? 'rgba(0,255,0,0.4)' : 'rgba(255,0,0,0.4)';
+      overlayCtx.fillRect(gridX + col * cellSize, gridY + row * cellSize, cellSize, cellSize);
+
+      overlayCtx.strokeStyle = 'black';
+      overlayCtx.lineWidth = 1;
+      overlayCtx.strokeRect(gridX + col * cellSize, gridY + row * cellSize, cellSize, cellSize);
+    }
+  }
+}
+
+if (mismatches > 3) {
+  alert(`🚫 Invalid or missing authentication pattern. (${mismatches} mismatches)`);
+  return;
+}
+
+ startCameraView() {
+  const video = this.videoRef?.nativeElement;
+  if (!video) {
+    alert('❌ Video element missing');
+    return;
+  }
+
+  navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: 'environment',
+      width: { ideal: 640 },
+      height: { ideal: 480 }
+    }
+  }).then((stream) => {
+    console.log("✅ getUserMedia success");
+    video.srcObject = stream;
+
+    video.onloadedmetadata = () => {
+      video.play().then(() => {
+        video.width = 640;
+        video.height = 480;
+        console.log("✅ Camera stream started");
+        alert("📸 Camera ready — starting scan loop");
+        this.processVideo();
+      });
+    };
+  }).catch((err) => {
+    console.error('❌ Camera error:', err);
+    alert('Camera access failed: ' + err.message);
+  });
+}
+  

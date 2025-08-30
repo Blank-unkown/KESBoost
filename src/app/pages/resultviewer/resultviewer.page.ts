@@ -2,22 +2,50 @@ import { Component, OnInit, AfterViewInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
-import { LocalDataService, ScannedResult } from '../../services/local-data.service';
+import { 
+  LocalDataService, 
+  ScannedResult, 
+  AnswerEntry   
+} from '../../services/local-data.service';
+import { FormsModule } from '@angular/forms';
 import Chart from 'chart.js/auto';
+import { HttpClientModule } from '@angular/common/http';
+import { TopicEntry } from '../../services/local-data.service';
+
+
+interface TosRowAnalysis {
+  topic: string;
+  competency: string;
+  level: string;
+  percentage: number;
+  numItems: number;
+  start: number;
+  end: number;
+  correct: number;
+  total: number;
+  percentScore: number;
+}
 
 @Component({
   selector: 'app-resultviewer',
   templateUrl: './resultviewer.page.html',
   styleUrls: ['./resultviewer.page.scss'],
   standalone: true,
-  imports: [CommonModule, IonicModule],
+  imports: [IonicModule, CommonModule, FormsModule, HttpClientModule],
 })
 export class ResultviewerPage implements OnInit, AfterViewInit {
   classId!: number;
   subjectId!: number;
   resultId!: number;
   result?: ScannedResult;
-  cognitiveBreakdown: { [level: string]: { correct: number; total: number } } = {};
+
+  tosAnalysis: TosRowAnalysis[] = [];
+  tosRowView: any[] = [];
+
+  private cognitiveChart?: Chart;
+  private answersChart?: Chart;
+  private topicChart?: Chart;
+  private competencyChart?: Chart;
 
   constructor(private route: ActivatedRoute) {}
 
@@ -26,7 +54,7 @@ export class ResultviewerPage implements OnInit, AfterViewInit {
 
   if (stateResult) {
     this.result = stateResult;
-    this.generateCognitiveBreakdown();
+    this.buildTosAnalysis();
   } else {
     this.route.queryParams.subscribe(params => {
       this.classId = +params['classId'];
@@ -36,10 +64,18 @@ export class ResultviewerPage implements OnInit, AfterViewInit {
       const subject = LocalDataService.getSubject(this.classId, this.subjectId);
       this.result = subject?.results?.find(r => r.id === this.resultId);
 
-      if (this.result) {
-        this.generateCognitiveBreakdown();
+      this.buildTosAnalysis();
+
+      // 🔹 move inside subscription
+      if (this.result?.tosRows) {
+        this.tosRowView = this.buildTosRowView(this.result.tosRows);
       }
     });
+  }
+
+  // 🔹 also handle the stateResult case here
+  if (this.result?.tosRows) {
+    this.tosRowView = this.buildTosRowView(this.result.tosRows);
   }
 }
 
@@ -47,69 +83,252 @@ export class ResultviewerPage implements OnInit, AfterViewInit {
   ngAfterViewInit() {
     setTimeout(() => {
       if (this.result) {
-        this.renderChart();
+        this.renderAnswerDistributionChart(this.result.answers);
+        this.renderCognitiveChart(this.result.answers);
+        this.renderTopicChart(this.result.answers);
+        this.renderCompetencyChart(this.result.answers);
       }
-    }, 500); // wait for view to render
+    }, 500);
   }
 
-  generateCognitiveBreakdown() {
-    const subject = LocalDataService.getSubject(this.classId, this.subjectId);
-    if (!subject || !subject.tos || !subject.answerKey) return;
+  // ✅ Build TOS Row Analysis
+  private buildTosAnalysis() {
+    if (!this.result) return;
 
-    const tosMap = LocalDataService.generateTOSMap(subject.tos);
-    const answers = this.result?.answers || [];
-    const answerKey = subject.answerKey;
+    const subject = LocalDataService.getSubject(this.classId, this.subjectId);
+    if (!subject?.tosRows) return;
+
+    this.tosAnalysis = subject.tosRows.map((row: any) => {
+      const start = row.startQuestion;
+      const end = row.endQuestion;
+      const rowAnswers = this.result!.answers.filter(
+        a => a.question >= start && a.question <= end
+      );
+
+      const total = rowAnswers.length;
+      const correct = rowAnswers.filter(a => a.correct).length;
+
+      return {
+        topic: row.topic,
+        competency: row.competency,
+        level: row.level,
+        percentage: row.percentage,
+        numItems: row.numItems,
+        start,
+        end,
+        correct,
+        total,
+        percentScore: total > 0 ? Math.round((correct / total) * 100) : 0,
+      };
+    });
+  }
+
+  
+buildTosRowView(tosRows: TopicEntry[]): any[] {
+  let itemCounter = 1;
+  const rows: any[] = [];
+
+  for (const row of tosRows) {
+    const cognitiveLevels: { level: string; count: number; range: string }[] = [];
+    const levels: (keyof TopicEntry)[] = [
+      'remembering', 'understanding', 'applying',
+      'analyzing', 'evaluating', 'creating'
+    ];
+
+    const questions: any[] = [];
+    let rowCorrect = 0;
+    let rowTotal = 0;
+
+    for (const lvl of levels) {
+      const count = Number(row[lvl]) || 0;
+      if (count > 0) {
+        const start = itemCounter;
+        const end = itemCounter + count - 1;
+
+        // 🔹 match answers to this range
+        for (let q = start; q <= end; q++) {
+          const ans = this.result?.answers.find(a => a.question === q);
+          if (ans) {
+            questions.push({
+              qNum: q,
+              selected: ans.marked ?? '—',
+              correct: ans.correctAnswer ?? '—',
+              isCorrect: ans.correct
+            });
+
+            rowTotal++;
+            if (ans.correct) rowCorrect++;
+          }
+        }
+
+        cognitiveLevels.push({
+          level: String(lvl),
+          count,
+          range: `${start}-${end}`
+        });
+        itemCounter += count;
+      }
+    }
+
+    // 🔹 calculate row performance (%)
+    const performance = rowTotal > 0 ? (rowCorrect / rowTotal) * 100 : 0;
+
+    rows.push({
+      topic: row.topicName,
+      competency: row.learningCompetency,
+      percent: row.percent,
+      expectedItems: row.expectedItems,
+      cognitives: cognitiveLevels,
+      questions,
+      rowCorrect,
+      rowTotal,
+      performance: performance.toFixed(1) + '%'   // e.g. "60.0%"
+    });
+  }
+
+  return rows;
+}
+
+  // ✅ Chart for A/B/C/D distribution
+  renderAnswerDistributionChart(answers: AnswerEntry[]) {
+    const ctx = document.getElementById('answersChart') as HTMLCanvasElement;
+    if (!ctx) return;
+
+    if (this.answersChart) this.answersChart.destroy();
+
+    const counts: Record<"A" | "B" | "C" | "D", number> = { A: 0, B: 0, C: 0, D: 0 };
+    answers.forEach(a => {
+      if (a.marked) counts[a.marked as "A" | "B" | "C" | "D"]++;
+    });
+
+    this.answersChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['A', 'B', 'C', 'D'],
+        datasets: [
+          {
+            label: 'Selections',
+            data: [counts.A, counts.B, counts.C, counts.D],
+            backgroundColor: 'rgba(54, 162, 235, 0.7)',
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: { title: { display: true, text: 'Answer Distribution' } },
+        scales: { y: { beginAtZero: true } },
+      },
+    });
+  }
+
+  // ✅ Chart for Bloom’s levels
+  renderCognitiveChart(answers: AnswerEntry[]) {
+    const ctx = document.getElementById('cognitiveChart') as HTMLCanvasElement;
+    if (!ctx) return;
+
+    if (this.cognitiveChart) this.cognitiveChart.destroy();
 
     const breakdown: { [level: string]: { correct: number; total: number } } = {};
 
-    tosMap.forEach((q, index) => {
-      const level = q.level;
-      breakdown[level] = breakdown[level] || { correct: 0, total: 0 };
+    answers.forEach(a => {
+      const level = a.level || 'N/A';
+      if (!breakdown[level]) breakdown[level] = { correct: 0, total: 0 };
       breakdown[level].total++;
-
-      if (answers[index] && answers[index] === answerKey[index]) {
-        breakdown[level].correct++;
-      }
+      if (a.correct) breakdown[level].correct++;
     });
 
-    this.cognitiveBreakdown = breakdown;
-  }
+    const labels = Object.keys(breakdown);
+    const correct = labels.map(l => breakdown[l].correct);
+    const total = labels.map(l => breakdown[l].total);
 
-  getBreakdownKeys() {
-    return Object.keys(this.cognitiveBreakdown);
-  }
-
-  renderChart() {
-    const ctx = document.getElementById('cognitiveChart') as HTMLCanvasElement;
-    if (!ctx || !this.result) return;
-
-    const labels = this.getBreakdownKeys();
-    const correct = labels.map(level => this.cognitiveBreakdown[level].correct);
-    const total = labels.map(level => this.cognitiveBreakdown[level].total);
-
-    new Chart(ctx, {
+    this.cognitiveChart = new Chart(ctx, {
       type: 'bar',
       data: {
         labels,
         datasets: [
-          {
-            label: 'Correct',
-            data: correct,
-            backgroundColor: 'rgba(54, 162, 235, 0.7)',
-          },
-          {
-            label: 'Total',
-            data: total,
-            backgroundColor: 'rgba(255, 99, 132, 0.3)',
-          }
-        ]
+          { label: 'Correct', data: correct, backgroundColor: 'rgba(75, 192, 192, 0.7)' },
+          { label: 'Total', data: total, backgroundColor: 'rgba(255, 99, 132, 0.3)' },
+        ],
       },
       options: {
         responsive: true,
-        scales: {
-          y: { beginAtZero: true }
-        }
-      }
+        plugins: { title: { display: true, text: "Bloom's Cognitive Breakdown" } },
+        scales: { y: { beginAtZero: true } },
+      },
+    });
+  }
+
+  // ✅ Chart for Topic Breakdown
+  renderTopicChart(answers: AnswerEntry[]) {
+    const ctx = document.getElementById('topicChart') as HTMLCanvasElement;
+    if (!ctx) return;
+
+    if (this.topicChart) this.topicChart.destroy();
+
+    const breakdown: { [topic: string]: { correct: number; total: number } } = {};
+
+    answers.forEach(a => {
+      const topic = a.topic || 'N/A';
+      if (!breakdown[topic]) breakdown[topic] = { correct: 0, total: 0 };
+      breakdown[topic].total++;
+      if (a.correct) breakdown[topic].correct++;
+    });
+
+    const labels = Object.keys(breakdown);
+    const correct = labels.map(l => breakdown[l].correct);
+    const total = labels.map(l => breakdown[l].total);
+
+    this.topicChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Correct', data: correct, backgroundColor: 'rgba(153, 102, 255, 0.7)' },
+          { label: 'Total', data: total, backgroundColor: 'rgba(255, 206, 86, 0.3)' },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: { title: { display: true, text: 'Topic Breakdown' } },
+        scales: { y: { beginAtZero: true } },
+      },
+    });
+  }
+
+  // ✅ Chart for Competency Breakdown
+  renderCompetencyChart(answers: AnswerEntry[]) {
+    const ctx = document.getElementById('competencyChart') as HTMLCanvasElement;
+    if (!ctx) return;
+
+    if (this.competencyChart) this.competencyChart.destroy();
+
+    const breakdown: { [competency: string]: { correct: number; total: number } } = {};
+
+    answers.forEach(a => {
+      const competency = a.competency || 'N/A';
+      if (!breakdown[competency]) breakdown[competency] = { correct: 0, total: 0 };
+      breakdown[competency].total++;
+      if (a.correct) breakdown[competency].correct++;
+    });
+
+    const labels = Object.keys(breakdown);
+    const correct = labels.map(l => breakdown[l].correct);
+    const total = labels.map(l => breakdown[l].total);
+
+    this.competencyChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Correct', data: correct, backgroundColor: 'rgba(255, 159, 64, 0.7)' },
+          { label: 'Total', data: total, backgroundColor: 'rgba(54, 162, 235, 0.3)' },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: { title: { display: true, text: 'Competency Breakdown' } },
+        scales: { y: { beginAtZero: true } },
+      },
     });
   }
 

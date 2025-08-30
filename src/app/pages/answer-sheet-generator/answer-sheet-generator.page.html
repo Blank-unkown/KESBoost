@@ -8,21 +8,24 @@
 </ion-header>
 
 <ion-content class="ion-padding">
+  <ion-button expand="block" color="primary" (click)="exportPDF()">
+    📄 Export & Share Answer Sheet
+  </ion-button>
   <div id="answer-sheet-container">
       <svg width="612" height="792" viewBox="0 0 1700 1700" xmlns="http://www.w3.org/2000/svg" style="background:#fff; border:1px solid #ccc;">
 
       <!-- Header Box -->
-      <rect x="115" y="40" width="580" height="110" fill="none" stroke="black" stroke-width="2"/>
+      <rect x="115" y="40" width="570" height="110" fill="none" stroke="black" stroke-width="2"/>
       <text x="125" y="85" font-size="16">Name: ____________________________</text>
       <text x="125" y="110" font-size="16">Class: {{ className }}</text>
       <text x="125" y="135" font-size="16">Subject: {{ subjectName }}</text>
 
-
+        
       <!-- Corner Markers -->
       <rect x="80" y="5" width="30" height="30" fill="black" />
-      <rect x="700" y="5" width="30" height="30" fill="black" />
+      <rect x="690" y="5" width="30" height="30" fill="black" />
       <rect x="80" y="800" width="30" height="30" fill="black" />
-      <rect x="700" y="800" width="30" height="30" fill="black" />
+      <rect x="690" y="800" width="30" height="30" fill="black" />
 
 
       <!-- Bubbles for Questions -->
@@ -37,11 +40,7 @@
         </g>
       </ng-container>
 
+
     </svg>
   </div>
-<ion-button expand="block" color="primary" (click)="exportPDF()">
-  📄 Export & Share Answer Sheet
-</ion-button>
-
-
 </ion-content>

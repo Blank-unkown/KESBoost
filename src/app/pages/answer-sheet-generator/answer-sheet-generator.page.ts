@@ -1,18 +1,15 @@
-import { Component, OnInit } from '@angular/core';
-import { NavController } from '@ionic/angular';
+import { Component, OnInit, Input } from '@angular/core';
+import { NavController, ToastController, LoadingController, IonicModule } from '@ionic/angular';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { IonicModule } from '@ionic/angular';
 import { LocalDataService, TopicEntry } from '../../services/local-data.service';
 import { ActivatedRoute } from '@angular/router';
-import { Input } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Share } from '@capacitor/share';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { ToastController, LoadingController } from '@ionic/angular';
-
+import { FileOpener } from '@capacitor-community/file-opener';
+import { Share } from '@capacitor/share';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 
 @Component({
   selector: 'app-answer-sheet-generator',
@@ -29,10 +26,13 @@ export class AnswerSheetGeneratorPage implements OnInit {
   totalQuestions = 0;
   className = '';
   subjectName = '';
+  pdfContent: string | null = null; // <-- add this
 
-  constructor(private route: ActivatedRoute,
-  private toastController: ToastController,
-  private loadingController: LoadingController) {}
+  constructor(
+    private route: ActivatedRoute,
+    private toastController: ToastController,
+    private loadingController: LoadingController
+  ) {}
 
   ngOnInit() {
     this.classId = Number(this.route.snapshot.paramMap.get('classId'));
@@ -44,8 +44,10 @@ export class AnswerSheetGeneratorPage implements OnInit {
     this.className = cls?.name || '';
     this.subjectName = subject?.name || '';
     this.tos = subject?.tos || [];
-
-    this.totalQuestions = this.tos.reduce((sum, topic) => sum + Number(topic.expectedItems || 0), 0);
+    this.totalQuestions = this.tos.reduce(
+      (sum, topic) => sum + Number(topic.expectedItems || 0),
+      0
+    );
   }
 
   getX(index: number): number {
@@ -56,14 +58,12 @@ export class AnswerSheetGeneratorPage implements OnInit {
   }
 
   getY(index: number): number {
-  const group = Math.floor(index / 10);
-  const row = index % 10;
-  const rowHeight = 30; // tighter rows
-  return group < 3 ? 185 + row * rowHeight : 505 + row * rowHeight;
-}
-
-
-async exportPDF() {   
+    const group = Math.floor(index / 10);
+    const row = index % 10;
+    const rowHeight = 30; // tighter rows
+    return group < 3 ? 185 + row * rowHeight : 505 + row * rowHeight;
+  }
+async exportPDF() {
   const element = document.getElementById('answer-sheet-container');
   if (!element) {
     alert('Answer sheet not found.');
@@ -77,74 +77,110 @@ async exportPDF() {
   await loading.present();
 
   try {
-    const canvas = await html2canvas(element, {
-  backgroundColor: '#ffffff',
-  scale: 2 // Lower scale for cleaner print
-});
+    // ✅ Clone the element so the preview isn't disturbed
+    const clone = element.cloneNode(true) as HTMLElement;
+    const rect = element.getBoundingClientRect();
+    clone.style.width = rect.width + "px";
+    clone.style.height = rect.height + "px";
+    clone.style.position = "fixed";
+    clone.style.left = "-10000px";
+    clone.style.top = "-10000px";
+    clone.style.paddingTop = "180px";
+    clone.style.zIndex = "-1";
+    document.body.appendChild(clone);
 
-const imgData = canvas.toDataURL('image/png');
-const pdf = new jsPDF({
-  orientation: 'portrait',
-  unit: 'mm',
-  format: 'a4' // Make it compatible with real printers
-});
+    // 📸 Render
+    const canvas = await html2canvas(clone, {
+      backgroundColor: "#ffffff",
+      scale: 2,
+      useCORS: true,
+    });
 
-const imgProps = pdf.getImageProperties(imgData);
-const pdfWidth = pdf.internal.pageSize.getWidth();
-const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    document.body.removeChild(clone);
 
-pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    // Convert canvas → PDF
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
 
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    const x = 0;
+    const y = (pdf.internal.pageSize.getHeight() - pdfHeight) / 2;
+
+    pdf.addImage(imgData, "PNG", x, y, pdfWidth, pdfHeight);
 
     const fileName = `answer-sheet-${Date.now()}.pdf`;
 
-    // 📱 Mobile (Capacitor)
-    if (Capacitor.getPlatform() !== 'web') {
-      const pdfBlob = pdf.output('blob');
-      const base64Data = await this.blobToBase64(pdfBlob);
+if (Capacitor.getPlatform() !== 'web') {
+  const pdfBase64 = pdf.output('datauristring').split(',')[1];
+  try {
+    // Step 1: Save file
+    const savedFile = await Filesystem.writeFile({
+      path: fileName,
+      data: pdfBase64,
+      directory: Directory.Documents,
+    });
 
-      const saved = await Filesystem.writeFile({
+    this.showToast('✅ PDF saved!');
+
+    // Step 2: Get sharable URI
+    let shareUrl = '';
+    if (Capacitor.getPlatform() === 'android') {
+      // Android → need content:// URI
+      const fileUri = await Filesystem.getUri({
         path: fileName,
-        data: base64Data,
         directory: Directory.Documents,
-        recursive: true,
       });
-
-      await loading.dismiss();
-
-      await Share.share({
-        title: 'Exported Answer Sheet',
-        text: 'Here is the answer sheet PDF.',
-        url: saved.uri,
-        dialogTitle: 'Share PDF',
-      });
-
-      this.showToast('✅ PDF saved and ready to share!');
+      shareUrl = fileUri.uri; // content:// URI
+    } else if (Capacitor.getPlatform() === 'ios') {
+      // iOS → can use base64 data URI
+      shareUrl = `data:application/pdf;base64,${pdfBase64}`;
     }
 
-    // 💻 Browser fallback
-    else {
-      const blobUrl = pdf.output('bloburl').toString();
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    // Step 3: Share file
+    await Share.share({
+      title: 'Generated Answer Sheet',
+      text: 'Here is the generated answer sheet.',
+      url: shareUrl,
+      dialogTitle: 'Share PDF',
+    });
 
-      await loading.dismiss();
-      this.showToast('✅ PDF downloaded!');
-    }
-  } catch (error) {
-    console.error('Export error:', error);
+    this.showToast('✅ PDF shared!');
+  } catch (err) {
+    console.error('PDF save/share failed:', err);
+    this.showToast('⚠️ PDF saved, but sharing failed.');
+  } finally {
     await loading.dismiss();
-    this.showToast('❌ Failed to export or share PDF.');
-  }
+  } 
 }
 
+else {
+  // 💻 Browser
+  const blobUrl = pdf.output('bloburl').toString();
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 
+  await loading.dismiss();
+  window.open(blobUrl, '_blank');
+  this.showToast('✅ PDF downloaded and opened!');
+}
 
-  private blobToBase64(blob: Blob): Promise<string> {
+} catch (error) {
+  console.error('Export error:', error);
+  await loading.dismiss();
+  this.showToast('❌ Failed to export or share PDF.');
+}
+}
+private blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = reject;
@@ -155,12 +191,13 @@ pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
     reader.readAsDataURL(blob);
   });
 }
+
 private async showToast(message: string) {
   const toast = await this.toastController.create({
     message,
     duration: 3000,
     position: 'bottom',
-    color: 'dark'
+    color: 'dark',
   });
   await toast.present();
 }
