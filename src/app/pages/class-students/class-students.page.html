@@ -1,0 +1,207 @@
+<ion-header class="custom-header">
+  <ion-toolbar color="primary" class="header-toolbar">
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/class-list"></ion-back-button>
+    </ion-buttons>
+    <ion-title class="header-title">Students</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="students-content">
+  <div class="confirm-overlay" *ngIf="showDeleteConfirm">
+    <div class="confirm-dialog">
+      <div class="confirm-title">Delete student(s)?</div>
+      <div class="confirm-message">
+        You are about to permanently delete
+        <strong>{{ deleteConfirmCount }}</strong>
+        student(s) from the class roster. This cannot be undone.
+      </div>
+      <div class="confirm-actions">
+        <ion-button fill="outline" (click)="cancelDeleteConfirm()" [disabled]="isTransferSaving">Cancel</ion-button>
+        <ion-button color="danger" (click)="confirmDeleteFromClass()" [disabled]="isTransferSaving">
+          <ion-spinner *ngIf="isTransferSaving" name="crescent" slot="start"></ion-spinner>
+          Delete
+        </ion-button>
+      </div>
+    </div>
+  </div>
+
+  <ion-card class="context-card" *ngIf="subjectName">
+    <ion-card-content>
+      <div class="context-row">
+        <div>
+          <div class="context-label">Subject</div>
+          <div class="context-value">{{ subjectName }}</div>
+        </div>
+        <div class="context-metrics">
+          <div class="metric-chip">
+            <div class="metric-title">Enrolled</div>
+            <div class="metric-value">{{ students.length }}</div>
+          </div>
+        </div>
+      </div>
+    </ion-card-content>
+  </ion-card>
+
+  <ion-card class="action-card">
+    <ion-card-header>
+      <ion-card-title>Enroll Existing Student</ion-card-title>
+      <ion-card-subtitle>Select from class roster and enroll into this subject</ion-card-subtitle>
+    </ion-card-header>
+    <ion-card-content>
+      <div class="pick-list">
+        <div class="pick-label">Tap a student</div>
+        <div class="pick-actions" *ngIf="availableRoster.length > 0">
+          <ion-button size="small" fill="outline" (click)="selectAllRoster()">Select All</ion-button>
+          <ion-button size="small" fill="clear" (click)="clearRosterSelection()">Clear</ion-button>
+        </div>
+        <ion-list class="pick-ion-list">
+          <ion-item
+            button
+            lines="none"
+            class="pick-item"
+            *ngFor="let s of availableRoster"
+            (click)="toggleRosterSelection(s.id, !selectedRosterStudentIds.has(s.id))"
+          >
+            <ion-checkbox slot="start" [checked]="selectedRosterStudentIds.has(s.id)"></ion-checkbox>
+            <ion-label>
+              <div class="pick-title">{{ s.name }}</div>
+              <div class="pick-sub" *ngIf="s.roll_number">Roll: {{ s.roll_number }}</div>
+            </ion-label>
+          </ion-item>
+
+          <ion-item lines="none" class="pick-empty" *ngIf="availableRoster.length === 0">
+            <ion-label>All students in this class are already enrolled in this subject.</ion-label>
+          </ion-item>
+        </ion-list>
+      </div>
+
+      <ion-button expand="block" class="secondary-action-btn" (click)="enrollSelectedStudents()" [disabled]="isEnrollSaving">
+        <ion-spinner *ngIf="isEnrollSaving" name="crescent" slot="start"></ion-spinner>
+        Enroll Selected
+      </ion-button>
+    </ion-card-content>
+  </ion-card>
+
+  <ion-card class="students-card">
+    <ion-card-header>
+      <ion-card-title>Add New Student</ion-card-title>
+      <ion-card-subtitle>This will add them to the class and enroll them into this subject</ion-card-subtitle>
+    </ion-card-header>
+
+    <ion-card-content>
+      <div class="student-form">
+        <ion-item class="form-item" lines="none">
+          <ion-label position="stacked">Student Name</ion-label>
+          <ion-input [(ngModel)]="studentForm.name" placeholder="e.g. Juan Dela Cruz" [disabled]="isSaving"></ion-input>
+        </ion-item>
+
+        <ion-item class="form-item" lines="none">
+          <ion-label position="stacked">Email (optional)</ion-label>
+          <ion-input [(ngModel)]="studentForm.email" placeholder="e.g. student@email.com" [disabled]="isSaving"></ion-input>
+        </ion-item>
+
+        <ion-item class="form-item" lines="none">
+          <ion-label position="stacked">Roll Number (optional)</ion-label>
+          <ion-input [(ngModel)]="studentForm.roll_number" placeholder="e.g. 12-A-001" [disabled]="isSaving"></ion-input>
+        </ion-item>
+
+        <ion-button expand="block" class="add-student-btn" (click)="addStudent()" [disabled]="isSaving">
+          <ion-spinner *ngIf="isSaving" name="crescent" slot="start"></ion-spinner>
+          Add Student
+        </ion-button>
+      </div>
+    </ion-card-content>
+  </ion-card>
+
+  <ion-card class="students-card">
+    <ion-card-header>
+      <ion-card-title>Enrolled Students</ion-card-title>
+      <ion-card-subtitle>Students currently enrolled in this subject</ion-card-subtitle>
+    </ion-card-header>
+    <ion-card-content>
+      <div class="bulk-actions" *ngIf="selectedStudentIds.size > 0">
+        <div class="bulk-title">Selected: {{ selectedStudentIds.size }}</div>
+
+        <div class="pick-actions">
+          <ion-button size="small" fill="outline" (click)="selectAllEnrolledOnPage()">Select This Page</ion-button>
+          <ion-button size="small" fill="outline" (click)="selectAllEnrolled()">Select All</ion-button>
+          <ion-button size="small" fill="clear" (click)="clearSelection()">Clear</ion-button>
+        </div>
+
+        <ion-item class="form-item" lines="none">
+          <ion-label position="stacked">Target Subject</ion-label>
+          <ion-select [(ngModel)]="transferTargetSubjectId" interface="popover" placeholder="Select subject">
+            <ion-select-option *ngFor="let sub of classSubjects" [value]="sub.id" [disabled]="sub.id === subjectId">
+              {{ sub.name }}
+            </ion-select-option>
+          </ion-select>
+        </ion-item>
+
+        <div class="transfer-mode">
+          <ion-segment [(ngModel)]="transferMode">
+            <ion-segment-button value="copy">
+              <ion-label>Copy</ion-label>
+            </ion-segment-button>
+            <ion-segment-button value="move">
+              <ion-label>Move</ion-label>
+            </ion-segment-button>
+          </ion-segment>
+        </div>
+
+        <div class="bulk-buttons">
+          <ion-button class="secondary-action-btn" (click)="transferEnrollment()" [disabled]="isTransferSaving" expand="block">
+            <ion-spinner *ngIf="isTransferSaving" name="crescent" slot="start"></ion-spinner>
+            Apply
+          </ion-button>
+          <ion-button color="danger" class="secondary-action-btn" (click)="unenrollSelected()" [disabled]="isTransferSaving" expand="block">
+            Unenroll
+          </ion-button>
+          <ion-button color="danger" fill="outline" class="secondary-action-btn" (click)="deleteSelectedFromClass()" [disabled]="isTransferSaving" expand="block">
+            Delete From Class
+          </ion-button>
+          <ion-button fill="clear" (click)="clearSelection()" expand="block">Clear</ion-button>
+        </div>
+      </div>
+
+      <div class="students-loading" *ngIf="isLoading">
+        <ion-spinner name="crescent"></ion-spinner>
+      </div>
+
+      <div class="students-list" *ngIf="!isLoading">
+        <ion-item lines="none" class="students-empty" *ngIf="students.length === 0">
+          <ion-label>No students enrolled yet. Use the actions above.</ion-label>
+        </ion-item>
+
+        <ion-list *ngIf="students.length > 0">
+          <ion-item *ngFor="let s of pagedStudents" class="student-item" lines="none">
+            <ion-checkbox
+              slot="start"
+              [checked]="selectedStudentIds.has(s.id)"
+              (ionChange)="toggleStudentSelection(s.id, $event.detail.checked)"
+            ></ion-checkbox>
+            <ion-label>
+              <h3 class="student-name">{{ s.name }}</h3>
+              <p class="student-meta">
+                <span *ngIf="s.roll_number">Roll: {{ s.roll_number }}</span>
+                <span *ngIf="s.email"> • {{ s.email }}</span>
+              </p>
+            </ion-label>
+          </ion-item>
+        </ion-list>
+
+        <div class="pagination" *ngIf="students.length > studentsPageSize">
+          <ion-button fill="outline" size="small" (click)="prevStudentsPage()" [disabled]="studentsPage <= 1">
+            Prev
+          </ion-button>
+          <div class="page-indicator">
+            Page {{ studentsPage }} / {{ totalStudentPages }}
+          </div>
+          <ion-button fill="outline" size="small" (click)="nextStudentsPage()" [disabled]="studentsPage >= totalStudentPages">
+            Next
+          </ion-button>
+        </div>
+      </div>
+    </ion-card-content>
+  </ion-card>
+</ion-content>

@@ -1,0 +1,191 @@
+<ion-menu side="start" menuId="student" contentId="student-content" class="student-menu">
+  <ion-header>
+    <ion-toolbar color="primary">
+      <ion-title>Menu</ion-title>
+    </ion-toolbar>
+  </ion-header>
+  <ion-content>
+    <ion-list>
+      <ion-item button (click)="logout()">
+        <ion-icon name="log-out-outline" slot="start"></ion-icon>
+        <ion-label>Logout</ion-label>
+      </ion-item>
+    </ion-list>
+  </ion-content>
+</ion-menu>
+
+<ion-header>
+  <ion-toolbar>
+    <ion-title>My Results</ion-title>
+    <ion-buttons slot="end">
+      <ion-menu-button menu="student" auto-hide="false"></ion-menu-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content id="student-content" class="student-dashboard-content">
+  <!-- Header Card -->
+  <div class="header-card">
+    <div class="greeting">
+      <h1>Hi, {{ currentUser?.name }}! 👨‍🎓</h1>
+      <p>Check your exam performance</p>
+    </div>
+    <ion-button (click)="logout()" color="danger" fill="clear" class="logout-btn">
+      <ion-icon name="log-out-outline" slot="start"></ion-icon>
+      Logout
+    </ion-button>
+  </div>
+
+  <!-- Refresh Button -->
+  <ion-fab vertical="bottom" horizontal="end" slot="fixed">
+    <ion-fab-button (click)="refreshData()">
+      <ion-icon name="refresh-outline"></ion-icon>
+    </ion-fab-button>
+  </ion-fab>
+
+  <!-- Segment Control -->
+  <ion-segment [value]="pageSegment" (ionChange)="onSegmentChange($event)" class="page-segment">
+    <ion-segment-button value="overview">
+      <ion-icon name="pie-chart-outline"></ion-icon>
+      <ion-label>Overview</ion-label>
+    </ion-segment-button>
+    <ion-segment-button value="scores">
+      <ion-icon name="stats-chart-outline"></ion-icon>
+      <ion-label>Scores</ion-label>
+    </ion-segment-button>
+    <ion-segment-button value="progress">
+      <ion-icon name="trending-up-outline"></ion-icon>
+      <ion-label>Progress</ion-label>
+    </ion-segment-button>
+  </ion-segment>
+
+  <div *ngIf="!isLoading" class="dashboard-container">
+    <!-- OVERVIEW TAB -->
+    <div *ngIf="pageSegment === 'overview'" class="overview-section">
+      <!-- Key Stats -->
+      <div class="key-stats" *ngIf="studentStats">
+        <div class="stat-box primary">
+          <h3>{{ studentStats.averageScore | number: '1.1-1' }}%</h3>
+          <p>Average Score</p>
+          <div class="badge">Excellent</div>
+        </div>
+
+        <div class="stat-box secondary">
+          <h3>{{ studentStats.totalTests }}</h3>
+          <p>Tests Completed</p>
+        </div>
+
+        <div class="stat-box success">
+          <h3>{{ studentStats.totalSubjects }}</h3>
+          <p>Subjects</p>
+        </div>
+      </div>
+
+      <!-- Performance Highlights -->
+      <div class="highlights" *ngIf="studentStats">
+        <h2>Performance Highlights</h2>
+        
+        <div class="highlight-card">
+          <div class="icon-wrapper success">
+            <ion-icon name="checkmark-circle-outline"></ion-icon>
+          </div>
+          <div class="content">
+            <h3>Strongest Topic</h3>
+            <p>{{ studentStats.mostScoredTopic }}</p>
+          </div>
+        </div>
+
+        <div class="highlight-card">
+          <div class="icon-wrapper warning">
+            <ion-icon name="warning-outline"></ion-icon>
+          </div>
+          <div class="content">
+            <h3>Needs Improvement</h3>
+            <p>{{ studentStats.weakTopic }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Study Tips -->
+      <div class="tips-section">
+        <h2>Study Tips</h2>
+        <ion-card class="tip-card">
+          <ion-card-content>
+            <ion-icon name="lightbulb-outline" color="warning"></ion-icon>
+            <h3>Focus on weak areas</h3>
+            <p>Dedicate more time to {{ studentStats?.weakTopic }} to improve your scores</p>
+          </ion-card-content>
+        </ion-card>
+
+        <ion-card class="tip-card">
+          <ion-card-content>
+            <ion-icon name="document-outline" color="primary"></ion-icon>
+            <h3>Practice regularly</h3>
+            <p>Consistent practice with different question types will boost your performance</p>
+          </ion-card-content>
+        </ion-card>
+      </div>
+    </div>
+
+    <!-- SCORES TAB -->
+    <div *ngIf="pageSegment === 'scores'" class="scores-section">
+      <h2>Recent Test Scores</h2>
+      
+      <div *ngIf="studentStats && studentStats.recentScores.length > 0">
+        <ion-card *ngFor="let score of studentStats.recentScores" class="score-card">
+          <ion-card-header>
+            <ion-card-title>{{ score.subjectName }}</ion-card-title>
+            <ion-card-subtitle>Attempted on {{ score.date }}</ion-card-subtitle>
+          </ion-card-header>
+          <ion-card-content>
+            <div class="score-display">
+              <div class="large-score" [class.high]="score.percentage >= 80" [class.medium]="score.percentage >= 60 && score.percentage < 80" [class.low]="score.percentage < 60">
+                {{ score.score }}/{{ score.total }}
+              </div>
+              <div class="percentage">
+                {{ score.percentage }}%
+              </div>
+            </div>
+            <div class="score-bar">
+              <div class="bar-fill" [style.width.%]="score.percentage" [class.high]="score.percentage >= 80" [class.medium]="score.percentage >= 60 && score.percentage < 80" [class.low]="score.percentage < 60"></div>
+            </div>
+            <ion-button color="primary" fill="clear" expand="block" (click)="viewSubjectDetails(score)">
+              <ion-icon name="open-outline" slot="end"></ion-icon>
+              View Details
+            </ion-button>
+          </ion-card-content>
+        </ion-card>
+      </div>
+    </div>
+
+    <!-- PROGRESS TAB -->
+    <div *ngIf="pageSegment === 'progress'" class="progress-section">
+      <h2>Performance Trends</h2>
+      
+      <ion-card class="chart-card">
+        <ion-card-content>
+          <canvas id="performanceChart"></canvas>
+        </ion-card-content>
+      </ion-card>
+
+      <div class="advice-box" *ngIf="studentStats">
+        <h3>Recommendation</h3>
+        <p *ngIf="studentStats.averageScore >= 80">
+          🎉 Excellent performance! Continue maintaining this level and aim for improvement in your weaker subjects.
+        </p>
+        <p *ngIf="studentStats.averageScore >= 60 && studentStats.averageScore < 80">
+          📚 Good effort! Focus on improving your weaker areas to boost overall performance.
+        </p>
+        <p *ngIf="studentStats.averageScore < 60">
+          💪 Keep practicing! Consistent effort and focused study on weak topics will improve your scores.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="isLoading" class="loading-container">
+    <ion-spinner name="crescent"></ion-spinner>
+    <p>Loading your results...</p>
+  </div>
+</ion-content>

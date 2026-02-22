@@ -1,0 +1,403 @@
+.custom-header {
+  .header-toolbar {
+    --background: #111827;
+
+    .header-title {
+      font-weight: 800;
+      font-size: 22px;
+      letter-spacing: -0.3px;
+    }
+  }
+}
+
+.students-content {
+  --padding-top: 16px;
+  --padding-bottom: 16px;
+  --padding-start: 16px;
+  --padding-end: 16px;
+  background: #f3f4f6;
+  --overflow: auto;
+}
+
+.students-content::part(scroll) {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+ion-card {
+  box-shadow: none;
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 9999;
+}
+
+.confirm-dialog {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+  padding: 14px;
+}
+
+.confirm-title {
+  font-size: 16px;
+  font-weight: 900;
+  color: #111827;
+}
+
+.confirm-message {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+  line-height: 1.4;
+}
+
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.bulk-actions {
+  margin: 0 0 12px 0;
+  padding: 12px;
+  background: #f9fafb;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 10px;
+
+  .bulk-title {
+    font-size: 12px;
+    font-weight: 900;
+    color: #111827;
+    margin-bottom: 10px;
+  }
+
+  .bulk-buttons {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 10px;
+  }
+}
+
+.context-card {
+  margin: 0 0 12px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+
+  ion-card-content {
+    background: #ffffff;
+    color: #111827;
+  }
+
+  .context-label {
+    font-size: 12px;
+    font-weight: 800;
+    color: #6b7280;
+  }
+
+  .context-value {
+    margin-top: 4px;
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: -0.2px;
+  }
+
+  .context-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .context-metrics {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .metric-chip {
+    background: #f9fafb;
+    border: 1px solid rgba(17, 24, 39, 0.08);
+    border-radius: 10px;
+    padding: 8px 10px;
+    text-align: center;
+    min-width: 92px;
+  }
+
+  .metric-title {
+    font-size: 11px;
+    font-weight: 800;
+    opacity: 0.9;
+  }
+
+  .metric-value {
+    margin-top: 2px;
+    font-size: 16px;
+    font-weight: 900;
+  }
+}
+
+.students-card {
+  margin: 0 0 12px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+
+  ion-card-header {
+    background: #ffffff;
+    border-bottom: 1px solid rgba(17, 24, 39, 0.08);
+
+    ion-card-title {
+      font-weight: 900;
+      font-size: 18px;
+      color: #111827;
+    }
+
+    ion-card-subtitle {
+      color: #6b7280;
+      font-weight: 600;
+    }
+  }
+
+  ion-card-content {
+    padding-top: 14px;
+  }
+}
+
+.action-card {
+  margin: 0 0 12px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+
+  ion-card-header {
+    background: #ffffff;
+    border-bottom: 1px solid rgba(17, 24, 39, 0.08);
+
+    ion-card-title {
+      font-weight: 900;
+      font-size: 15px;
+      color: #111827;
+    }
+
+    ion-card-subtitle {
+      color: #6b7280;
+      font-weight: 600;
+    }
+  }
+}
+
+.secondary-action-btn {
+  --border-radius: 10px;
+  height: 42px;
+  font-weight: 900;
+}
+
+.pick-list {
+  margin-bottom: 10px;
+}
+
+.pick-label {
+  font-size: 12px;
+  font-weight: 900;
+  color: #374151;
+  margin: 2px 2px 8px;
+}
+
+.pick-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 2px 8px;
+}
+
+.pick-ion-list {
+  background: transparent;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.pick-item {
+  --background: #ffffff;
+  margin: 6px 0;
+  border-radius: 10px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+
+  ion-checkbox {
+    margin-right: 8px;
+  }
+}
+
+.pick-empty {
+  --background: transparent;
+  color: #6b7280;
+  font-weight: 700;
+}
+
+.pick-title {
+  font-weight: 900;
+  color: #111827;
+}
+
+.pick-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+}
+
+.transfer-mode {
+  margin-top: 8px;
+  margin-bottom: 10px;
+
+  ion-segment {
+    background: rgba(255, 255, 255, 0.75);
+    border-radius: 14px;
+    padding: 6px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+  }
+}
+
+.student-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+
+  .form-item {
+    --background: rgba(255, 255, 255, 0.95);
+    --border-radius: 12px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+
+    ion-label {
+      font-weight: 700;
+      font-size: 12px;
+      color: #374151;
+    }
+
+    ion-input {
+      --padding-start: 12px;
+      --padding-end: 12px;
+      font-weight: 600;
+      color: #111827;
+    }
+  }
+
+  .add-student-btn {
+    grid-column: 1 / -1;
+    --border-radius: 12px;
+    height: 44px;
+    font-weight: 800;
+  }
+}
+
+.student-item {
+  --background: #ffffff;
+  border-radius: 10px;
+  margin: 6px 0;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+
+  ion-checkbox {
+    margin-right: 8px;
+  }
+
+  .student-name {
+    margin: 0;
+    font-weight: 800;
+    color: #111827;
+  }
+
+  .student-meta {
+    margin: 4px 0 0;
+    color: #6b7280;
+    font-weight: 600;
+    font-size: 12px;
+  }
+}
+
+.students-empty {
+  --background: transparent;
+  color: #6b7280;
+  font-weight: 700;
+}
+
+.students-loading {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 4px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+.page-indicator {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 900;
+  color: #374151;
+}
+
+@media (max-width: 480px) {
+  .students-content {
+    --padding-top: 12px;
+    --padding-bottom: 12px;
+    --padding-start: 12px;
+    --padding-end: 12px;
+  }
+
+  .context-card {
+    .context-row {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .metric-chip {
+      min-width: 100%;
+      text-align: left;
+    }
+  }
+
+  .student-form {
+    grid-template-columns: 1fr;
+  }
+
+  .secondary-action-btn,
+  .add-student-btn {
+    height: 46px;
+  }
+
+  .pick-item {
+    margin: 6px 0;
+  }
+
+  .bulk-actions {
+    padding: 10px;
+  }
+
+  .pagination {
+    gap: 8px;
+  }
+}

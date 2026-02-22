@@ -182,7 +182,7 @@ export class ScanPage implements AfterViewInit {
         this.subjectId = Number(params['subjectId']);
         const subject = LocalDataService.getSubject(this.classId, this.subjectId);
         if (!subject || !subject.answerKey) {
-          alert('❌ No answer key found for this subject!');
+          alert(' No answer key found for this subject!');
           return;
         }
         this.answerKey = {};
@@ -195,7 +195,7 @@ export class ScanPage implements AfterViewInit {
         this.gradeLevel = params['gradeLevel'] || '';
       });
           
-      // ✅ Start camera only once here
+      // Start camera only once here
       this.onStartCameraButtonClick();
     }
 
@@ -203,7 +203,7 @@ export class ScanPage implements AfterViewInit {
   while (!(window as any).cv || !(window as any).cv.Mat) {
     await new Promise(res => setTimeout(res, 50));
   }
-  console.log("✅ OpenCV is ready");
+  console.log(" OpenCV is ready");
 }
 
   private async waitForVideoElement(): Promise<void> {
@@ -220,38 +220,65 @@ private initOpenCVMatsAndCapture(videoEl: HTMLVideoElement) {
   }
 }
 
-  onStartCameraButtonClick() {
+  private async ensureCameraPermission(): Promise<boolean> {
+    try {
+      if (!this.platform.is('android')) return true;
+
+      const perm = this.androidPermissions.PERMISSION.CAMERA;
+      const status = await this.androidPermissions.checkPermission(perm);
+      if (status?.hasPermission) return true;
+
+      const req = await this.androidPermissions.requestPermission(perm);
+      return !!req?.hasPermission;
+    } catch (err) {
+      console.error('Camera permission check/request failed:', err);
+      return false;
+    }
+  }
+
+  async onStartCameraButtonClick() {
+    const ok = await this.ensureCameraPermission();
+    if (!ok) {
+      alert('Camera permission is required to scan. Please allow camera access in app settings.');
+      this.showCamera = false;
+      return;
+    }
+
     this.showCamera = true;
     this.startCameraView();
   }
 
   startCameraView() {
-  const videoEl: HTMLVideoElement = this.videoRef?.nativeElement;
-  if (!videoEl) {
-    console.warn('Video element not ready, retrying...');
-    setTimeout(() => this.startCameraView(), 50); // retry shortly
-    return;
-  }
-
-  navigator.mediaDevices.getUserMedia({
-    video: {
-      facingMode: 'environment',
-      width: { ideal: 640 },
-      height: { ideal: 480 }
+    const videoEl: HTMLVideoElement = this.videoRef?.nativeElement;
+    if (!videoEl) {
+      console.warn('Video element not ready, retrying...');
+      setTimeout(() => this.startCameraView(), 50);
+      return;
     }
-  }).then((stream) => {
-    videoEl.srcObject = stream;
-    videoEl.play();
-    videoEl.onloadedmetadata = () => {
-      videoEl.width = 640;
-      videoEl.height = 480;
-      this.processVideo();
-    };
-  }).catch((err) => {
-    console.error('Camera error:', err);
-    alert('Error accessing camera: ' + err.message);
-  });
-}
+
+    this.cameraService.attachToVideo(videoEl).then(() => {
+      videoEl.onloadedmetadata = () => {
+        videoEl.width = 640;
+        videoEl.height = 480;
+        this.processVideo();
+      };
+
+      if (videoEl.readyState >= 1) {
+        videoEl.width = 640;
+        videoEl.height = 480;
+        this.processVideo();
+      }
+    }).catch((err: any) => {
+      console.error('Camera error:', err);
+      const msg = String(err?.message || err);
+      if (msg.toLowerCase().includes('permission')) {
+        alert('Camera permission denied. Please allow camera access in app settings.');
+      } else {
+        alert('Error accessing camera: ' + msg);
+      }
+      this.showCamera = false;
+    });
+  }
 
   goToResultViewer() {
     this.router.navigate(['/resultviewer'], {

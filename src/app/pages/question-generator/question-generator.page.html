@@ -8,20 +8,139 @@
 </ion-header>
 
 <ion-content class="ion-padding">
-  <h2>{{ className }} - {{ subjectName }}</h2>
+  <div class="page">
+    <ion-card class="summary-card">
+      <ion-card-header>
+        <ion-card-title>{{ className }}</ion-card-title>
+        <ion-card-subtitle>{{ subjectName }}</ion-card-subtitle>
+      </ion-card-header>
+      <ion-card-content>
+        <ion-item lines="none" class="topic-item">
+          <ion-label position="stacked">Topic</ion-label>
+          <ion-select [(ngModel)]="selectedTopic" (ionChange)="onTopicChange()" interface="popover">
+            <ion-select-option *ngFor="let t of topicOptions" [value]="t">{{ t }}</ion-select-option>
+          </ion-select>
+        </ion-item>
 
-  <ion-list>
-    <ion-item *ngFor="let q of questions; let i = index">
-      <ion-label position="stacked">
-        <strong>Topic:</strong> {{ q.topic }}<br>
-        <strong>Competency:</strong> {{ q.competency }}<br>
-        <strong>Cognitive Level:</strong> {{ q.level }}
-      </ion-label>
-      <ion-textarea [(ngModel)]="questions[i].question"></ion-textarea>
-    </ion-item>
-  </ion-list>
+        <div class="actions">
+          <ion-button class="action" color="primary" [disabled]="isGeneratingAI" (click)="generateWithAI()">
+            <ion-spinner *ngIf="isGeneratingAI" name="crescent" style="margin-right: 8px;"></ion-spinner>
+            Generate with AI
+          </ion-button>
 
-  <ion-button expand="block" color="success" (click)="saveQuestions()">
-    Save All Questions
-  </ion-button>
+          <ion-button class="action" color="success" (click)="saveQuestions()">
+            Save
+          </ion-button>
+        </div>
+      </ion-card-content>
+    </ion-card>
+
+    <div class="question-list">
+      <ion-card class="question-card" *ngFor="let q of questions; let i = index">
+        <ion-card-content>
+          <div class="meta">
+            <ion-chip color="primary" class="meta-chip meta-chip--num">
+              <ion-label>#{{ i + 1 }}</ion-label>
+            </ion-chip>
+            <ion-chip color="medium" class="meta-chip">
+              <ion-label>{{ q.topic }}</ion-label>
+            </ion-chip>
+            <ion-chip color="tertiary" class="meta-chip">
+              <ion-label>{{ q.level }}</ion-label>
+            </ion-chip>
+
+            <ion-button fill="clear" color="danger" size="small" (click)="deleteQuestion(i)">
+              Delete
+            </ion-button>
+          </div>
+
+          <div class="competency" *ngIf="q.competency && !q.competency.match('^\\d+$')">
+            {{ q.competency }}
+          </div>
+
+          <ion-textarea
+            autoGrow="true"
+            fill="outline"
+            label="Question"
+            labelPlacement="stacked"
+            [(ngModel)]="questions[i].question"
+          ></ion-textarea>
+
+          <div class="choices">
+            <ion-item lines="none" class="choice-item">
+              <ion-label position="stacked">A</ion-label>
+              <ion-input [(ngModel)]="questions[i].choices.A"></ion-input>
+            </ion-item>
+
+            <ion-item lines="none" class="choice-item">
+              <ion-label position="stacked">B</ion-label>
+              <ion-input [(ngModel)]="questions[i].choices.B"></ion-input>
+            </ion-item>
+
+            <ion-item lines="none" class="choice-item">
+              <ion-label position="stacked">C</ion-label>
+              <ion-input [(ngModel)]="questions[i].choices.C"></ion-input>
+            </ion-item>
+
+            <ion-item lines="none" class="choice-item">
+              <ion-label position="stacked">D</ion-label>
+              <ion-input [(ngModel)]="questions[i].choices.D"></ion-input>
+            </ion-item>
+          </div>
+
+          <ion-item lines="none" class="answer-item">
+            <ion-label position="stacked">Correct Answer</ion-label>
+            <ion-select [(ngModel)]="questions[i].answer" interface="popover">
+              <ion-select-option value="A">A</ion-select-option>
+              <ion-select-option value="B">B</ion-select-option>
+              <ion-select-option value="C">C</ion-select-option>
+              <ion-select-option value="D">D</ion-select-option>
+            </ion-select>
+          </ion-item>
+
+          <div class="answer-warn" *ngIf="questions[i].answer === ''">
+            Please select A, B, C, or D.
+          </div>
+        </ion-card-content>
+      </ion-card>
+    </div>
+  </div>
+
+  <div class="chat-bubble" (click)="isChatOpen = true">
+    <img class="chat-bubble-icon" src="assets/logo/Google_Gemini_icon_2025.svg.png" alt="Gemini" />
+  </div>
+
+  <div class="chat-overlay" *ngIf="isChatOpen" (click)="isChatOpen = false"></div>
+  <div class="chat-panel" [class.chat-panel--open]="isChatOpen">
+    <div class="chat-header">
+      <div class="chat-title">Gemini Chat</div>
+      <ion-button fill="clear" size="small" (click)="isChatOpen = false">Close</ion-button>
+    </div>
+
+    <div class="chat-messages">
+      <div class="chat-empty" *ngIf="!chatMessages.length">
+        Ask Gemini to generate MCQs (A–D) and I’ll insert them into your list.
+      </div>
+
+      <div *ngFor="let m of chatMessages" class="chat-row" [class.chat-row--user]="m.role === 'user'" [class.chat-row--gemini]="m.role === 'gemini'">
+        <div class="chat-bubble-msg">{{ m.text }}</div>
+      </div>
+    </div>
+
+    <div class="chat-input">
+      <ion-textarea
+        autoGrow="true"
+        fill="outline"
+        label="Prompt"
+        labelPlacement="stacked"
+        placeholder="Example: Create 3 MCQs about Physical Activity. Include A-D and correct answer letter."
+        [(ngModel)]="promptText"
+      ></ion-textarea>
+
+      <ion-button expand="block" color="tertiary" [disabled]="isPromptingAI" (click)="askGemini()">
+        <ion-spinner *ngIf="isPromptingAI" name="crescent" style="margin-right: 8px;"></ion-spinner>
+        Send
+      </ion-button>
+    </div>
+  </div>
 </ion-content>

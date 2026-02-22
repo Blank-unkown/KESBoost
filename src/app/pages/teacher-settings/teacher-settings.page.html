@@ -1,0 +1,128 @@
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/teacher-dashboard"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Settings</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="settings-content">
+  <ion-spinner *ngIf="isLoading" name="crescent" class="loading-spinner"></ion-spinner>
+
+  <div *ngIf="!isLoading" class="settings-container">
+    <ion-card class="profile-card">
+      <ion-card-content>
+        <div class="profile-header">
+          <div class="avatar-large">{{ currentUser?.name?.charAt(0)?.toUpperCase() }}</div>
+          <div class="profile-text">
+            <div class="profile-name">{{ currentUser?.name }}</div>
+            <div class="profile-email">{{ currentUser?.email }}</div>
+          </div>
+        </div>
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Edit Profile Form -->
+    <ion-card class="settings-card">
+      <ion-card-header>
+        <ion-card-title>Profile Information</ion-card-title>
+      </ion-card-header>
+
+      <ion-card-content>
+        <div class="form-grid">
+          <!-- Full Name -->
+          <ion-item class="form-item" lines="none">
+            <ion-icon slot="start" name="person-outline"></ion-icon>
+            <ion-label position="stacked">Full Name</ion-label>
+            <ion-input
+              [(ngModel)]="formData.name"
+              name="name"
+              type="text"
+              placeholder="Enter your full name"
+            ></ion-input>
+          </ion-item>
+
+          <!-- Email -->
+          <ion-item class="form-item" lines="none">
+            <ion-icon slot="start" name="mail-outline"></ion-icon>
+            <ion-label position="stacked">Email Address</ion-label>
+            <ion-input
+              [(ngModel)]="formData.email"
+              name="email"
+              type="email"
+              placeholder="Enter your email"
+              readonly
+            ></ion-input>
+          </ion-item>
+
+          <!-- School ID -->
+          <ion-item class="form-item" lines="none">
+            <ion-icon slot="start" name="school-outline"></ion-icon>
+            <ion-label position="stacked">School ID</ion-label>
+            <ion-input
+              [(ngModel)]="formData.schoolId"
+              name="schoolId"
+              type="text"
+              placeholder="Your school ID"
+            ></ion-input>
+          </ion-item>
+
+          <!-- Bio -->
+          <ion-item class="form-item span-2" lines="none">
+            <ion-icon slot="start" name="document-text-outline"></ion-icon>
+            <ion-label position="stacked">Bio (Optional)</ion-label>
+            <ion-textarea
+              [(ngModel)]="formData.bio"
+              name="bio"
+              placeholder="Write a short bio about yourself"
+              rows="3"
+              autoGrow="true"
+            ></ion-textarea>
+          </ion-item>
+        </div>
+
+        <!-- Save Button -->
+        <div class="button-group">
+          <ion-button
+            expand="block"
+            color="primary"
+            (click)="saveProfile()"
+            [disabled]="isSaving"
+            class="primary-btn"
+          >
+            <ion-icon name="checkmark" slot="start"></ion-icon>
+            {{ isSaving ? 'Saving...' : 'Save Changes' }}
+          </ion-button>
+          <ion-button
+            expand="block"
+            color="medium"
+            (click)="goBack()"
+            [disabled]="isSaving"
+            class="secondary-btn"
+          >
+            <ion-icon name="close" slot="start"></ion-icon>
+            Cancel
+          </ion-button>
+        </div>
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Info Card -->
+    <ion-card class="info-card">
+      <ion-card-header>
+        <ion-card-title>Account Info</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <div class="info-row">
+          <span class="label">Account Type:</span>
+          <span class="value">Teacher</span>
+        </div>
+        <div class="info-row">
+          <span class="label">User ID:</span>
+          <span class="value">{{ currentUser?.id }}</span>
+        </div>
+      </ion-card-content>
+    </ion-card>
+  </div>
+</ion-content>

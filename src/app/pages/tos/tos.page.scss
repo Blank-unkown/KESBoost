@@ -1,47 +1,205 @@
-/* ⚙️ General Table Styling */
-.table-scroll {
+ .tos-content {
+  --padding-top: 12px;
+  --padding-bottom: 16px;
+  --padding-start: 12px;
+  --padding-end: 12px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #eef2ff 100%);
+  min-height: 100vh;
+ }
+
+ .context-card {
+  margin: 0 0 12px 0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+
+  ion-card-content {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+  }
+
+  .context-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .context-label {
+    font-size: 12px;
+    font-weight: 700;
+    opacity: 0.85;
+  }
+
+  .context-value {
+    margin-top: 2px;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.2px;
+  }
+
+  .summary-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .summary-chip {
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 12px;
+    padding: 10px;
+  }
+
+  .summary-title {
+    font-size: 11px;
+    font-weight: 700;
+    opacity: 0.9;
+  }
+
+  .summary-value {
+    margin-top: 2px;
+    font-size: 16px;
+    font-weight: 900;
+  }
+ }
+
+ .mode-segment {
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 14px;
+  padding: 6px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
+ }
+
+ .section-header {
+  margin: 12px 2px 10px;
+
+  &.center {
+    text-align: center;
+  }
+
+  .section-title {
+    font-size: 18px;
+    font-weight: 900;
+    color: #111827;
+    letter-spacing: -0.3px;
+  }
+
+  .section-subtitle {
+    margin-top: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #6b7280;
+  }
+ }
+
+ .add-topic-btn {
+  --border-radius: 12px;
+  height: 44px;
+  font-weight: 800;
+ }
+
+ .primary-action {
+  --border-radius: 12px;
+  height: 46px;
+  font-weight: 800;
+ }
+
+ /* General Table Styling */
+ .table-scroll {
   overflow-x: auto;
   overflow-y: hidden;
   width: 100%;
-}
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+ }
 
-table {
-  min-width: 1000px;
+ table {
+  min-width: 1060px;
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 13px;
-}
+ }
 
-th,
-td {
-  border: 1px solid #ccc;
-  padding: 8px;
+ thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #111827;
+  color: #fff;
+  font-weight: 900;
+  font-size: 12px;
+  padding: 10px 8px;
+ }
+
+ th,
+ td {
+  border-bottom: 1px solid rgba(17, 24, 39, 0.08);
+  padding: 10px 8px;
   text-align: center;
-}
+ }
 
-input {
-  width: 100px;
-  padding: 4px;
-}
+ tbody tr:nth-child(even) td {
+  background: rgba(17, 24, 39, 0.02);
+ }
 
-/* ✅ New: Responsive segment styling for mobile (Answer Key A–D buttons) */
-ion-segment {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
+ tfoot th,
+ tfoot td {
+  background: rgba(102, 126, 234, 0.08);
+  font-weight: 900;
+ }
+
+ input {
   width: 100%;
-}
+  min-width: 90px;
+  max-width: 220px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(17, 24, 39, 0.15);
+  background: rgba(255, 255, 255, 0.95);
+  font-weight: 700;
+  color: #111827;
+ }
 
-ion-segment-button {
-  flex: 1 1 22%;       // Take up to 22% width, wrap if needed
-  min-width: 60px;     // Prevent it from being too small
-  margin: 4px;         // Add spacing between buttons
-}
+ input[type='number'] {
+  max-width: 110px;
+  text-align: center;
+ }
 
-ion-item {
-  --padding-start: 4px;
-  --padding-end: 4px;
-}
+ input:focus {
+  outline: none;
+  border-color: rgba(102, 126, 234, 0.9);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.22);
+ }
+
+ .print-title {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 900;
+  margin: 4px 0 6px;
+ }
+
+ .print-subtitle {
+  text-align: center;
+  color: #374151;
+  font-weight: 600;
+  margin-bottom: 12px;
+ }
+
+ @media (max-width: 480px) {
+  .context-card {
+    .context-row {
+      grid-template-columns: 1fr;
+    }
+
+    .summary-row {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+ }
 
 /* 📜 Scrollable printable area for TOS */
 .print-scroll {

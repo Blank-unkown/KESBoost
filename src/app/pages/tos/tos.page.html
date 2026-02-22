@@ -8,83 +8,130 @@
 </ion-header>
 
 
-<ion-content class="ion-padding">
+<ion-content class="tos-content">
+
+  <ion-card class="context-card">
+    <ion-card-content>
+      <div class="context-row">
+        <div class="context-block">
+          <div class="context-label">Class</div>
+          <div class="context-value">{{ className || '-' }}</div>
+        </div>
+        <div class="context-block">
+          <div class="context-label">Subject</div>
+          <div class="context-value">{{ subjectName || '-' }}</div>
+        </div>
+      </div>
+
+      <div class="summary-row">
+        <div class="summary-chip">
+          <div class="summary-title">Days</div>
+          <div class="summary-value">{{ getTotal('days') }}</div>
+        </div>
+        <div class="summary-chip">
+          <div class="summary-title">Percent</div>
+          <div class="summary-value">{{ getTotal('percent') }}%</div>
+        </div>
+        <div class="summary-chip">
+          <div class="summary-title">Planned Items</div>
+          <div class="summary-value">{{ getTotal('expectedItems') }}</div>
+        </div>
+        <div class="summary-chip">
+          <div class="summary-title">Bloom Items</div>
+          <div class="summary-value">{{ totalTosItems }}</div>
+        </div>
+      </div>
+    </ion-card-content>
+  </ion-card>
 
   <!-- Mode Switch Buttons -->
-  <ion-segment [(ngModel)]="viewMode">
-    <ion-segment-button value="edit">Edit</ion-segment-button>
-    <ion-segment-button value="answersheet">Answer Sheet</ion-segment-button>
-    <ion-segment-button value="print">Print</ion-segment-button>
+  <ion-segment [(ngModel)]="viewMode" (ionChange)="onModeChange(viewMode)" class="mode-segment">
+    <ion-segment-button value="edit">
+      <ion-label>Edit</ion-label>
+    </ion-segment-button>
+    <ion-segment-button value="answersheet">
+      <ion-label>Answer Sheet</ion-label>
+    </ion-segment-button>
+    <ion-segment-button value="print">
+      <ion-label>Print</ion-label>
+    </ion-segment-button>
   </ion-segment>
 
-  <!-- 📝 Edit Mode -->
+  <!-- Edit Mode -->
   <div *ngIf="viewMode === 'edit'">
-    <h2>Edit TOS</h2>
-    <p><strong>Class:</strong> {{ className }} | <strong>Subject:</strong> {{ subjectName }}</p>
-  <ion-button expand="block" (click)="addTopicRow()">
-    Add New Topic
-  </ion-button>
+    <div class="section-header">
+      <div class="section-title">Edit TOS</div>
+      <div class="section-subtitle">Add topics and distribute items across Bloom's levels</div>
+    </div>
+
+    <ion-button expand="block" (click)="addTopicRow()" class="add-topic-btn">
+      Add New Topic
+    </ion-button>
+
+    <ion-button expand="block" color="success" class="primary-action" [disabled]="isSavingTos" (click)="saveTos()">
+      <ion-spinner *ngIf="isSavingTos" name="crescent" style="margin-right: 8px;"></ion-spinner>
+      Save TOS
+    </ion-button>
 
     <div class="table-scroll">
-  <table>
-    <thead>
-      <tr>
-        <th>Topic</th>
-        <th>Competency</th>
-        <th>No. of Days</th>
-        <th>%</th>
-        <th>No. of Items</th>
-        <th>R</th>
-        <th>U</th>
-        <th>Ap</th>
-        <th>An</th>
-        <th>Ev</th>
-        <th>Cr</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr *ngFor="let row of tos">
-        <td><input [(ngModel)]="row.topicName" type="text" /></td>
-        <td><input [(ngModel)]="row.learningCompetency" type="text" /></td>
-        <td><input [(ngModel)]="row.days" type="number" /></td>
-        <td><input [(ngModel)]="row.percent" type="number" /></td>
-        <td><input [(ngModel)]="row.expectedItems" type="number" /></td>
-        <td><input [(ngModel)]="row.remembering" type="number" /></td>
-        <td><input [(ngModel)]="row.understanding" type="number" /></td>
-        <td><input [(ngModel)]="row.applying" type="number" /></td>
-        <td><input [(ngModel)]="row.analyzing" type="number" /></td>
-        <td><input [(ngModel)]="row.evaluating" type="number" /></td>
-        <td><input [(ngModel)]="row.creating" type="number" /></td>
-      </tr>
-    </tbody>
-    <tfoot>
-      <tr>
-        <th colspan="2">Total</th>
-        <td>{{ getTotal('days') }}</td>
-        <td>{{ getTotal('percent') }}</td>
-        <td>{{ getTotal('expectedItems') }}</td>
-        <td>{{ getTotal('remembering') }}</td>
-        <td>{{ getTotal('understanding') }}</td>
-        <td>{{ getTotal('applying') }}</td>
-        <td>{{ getTotal('analyzing') }}</td>
-        <td>{{ getTotal('evaluating') }}</td>
-        <td>{{ getTotal('creating') }}</td>
-      </tr>
-    </tfoot>
-  </table>
-</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Topic</th>
+            <th>Competency</th>
+            <th>No. of Days</th>
+            <th>%</th>
+            <th>No. of Items</th>
+            <th>R</th>
+            <th>U</th>
+            <th>Ap</th>
+            <th>An</th>
+            <th>Ev</th>
+            <th>Cr</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of tos">
+            <td><input [(ngModel)]="row.topicName" type="text" /></td>
+            <td><input [(ngModel)]="row.learningCompetency" type="text" /></td>
+            <td><input [(ngModel)]="row.days" type="number" /></td>
+            <td><input [(ngModel)]="row.percent" type="number" /></td>
+            <td><input [(ngModel)]="row.expectedItems" type="number" /></td>
+            <td><input [(ngModel)]="row.remembering" type="number" /></td>
+            <td><input [(ngModel)]="row.understanding" type="number" /></td>
+            <td><input [(ngModel)]="row.applying" type="number" /></td>
+            <td><input [(ngModel)]="row.analyzing" type="number" /></td>
+            <td><input [(ngModel)]="row.evaluating" type="number" /></td>
+            <td><input [(ngModel)]="row.creating" type="number" /></td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <th colspan="2">Total</th>
+            <td>{{ getTotal('days') }}</td>
+            <td>{{ getTotal('percent') }}</td>
+            <td>{{ getTotal('expectedItems') }}</td>
+            <td>{{ getTotal('remembering') }}</td>
+            <td>{{ getTotal('understanding') }}</td>
+            <td>{{ getTotal('applying') }}</td>
+            <td>{{ getTotal('analyzing') }}</td>
+            <td>{{ getTotal('evaluating') }}</td>
+            <td>{{ getTotal('creating') }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
 
-
-    <ion-button expand="block" color="primary" [routerLink]="['/question-generator', classId, subjectId]">
+    <ion-button expand="block" color="primary" class="primary-action" [routerLink]="['/question-generator', classId, subjectId]">
       Generate Questions
     </ion-button>
 
   </div>
 
-  <!-- 🖨️ Printable Mode -->
+  <!-- Printable Mode -->
   <div *ngIf="viewMode === 'print'" id="print-area" class="scroll-container print-scroll">
-    <h2 style="text-align: center;">Table of Specification (TOS)</h2>
-    <p><strong>Class:</strong> {{ className }} | <strong>Subject:</strong> {{ subjectName }}</p>
+    <div class="print-title">Table of Specification (TOS)</div>
+    <div class="print-subtitle"><strong>Class:</strong> {{ className }} | <strong>Subject:</strong> {{ subjectName }}</div>
 
     <table>
       <thead>
@@ -119,24 +166,27 @@
       </tbody>
     </table>
 
-    <ion-button expand="block" (click)="setMode('print')">
-      🖨️ Print TOS
+    <ion-button expand="block" (click)="setMode('print')" class="primary-action">
+      Print TOS
     </ion-button>
 
   </div>
 
-  <!-- 🧾 Answer Sheet Generator Mode -->
+  <!-- Answer Sheet Generator Mode -->
   <div *ngIf="viewMode === 'answersheet'">
-    <h2 style="text-align: center;">Auto-Generated Answer Sheet</h2>
+    <div class="section-header center">
+      <div class="section-title">Auto-Generated Answer Sheet</div>
+      <div class="section-subtitle">Generate, set answer key, then start scanning</div>
+    </div>
     <ion-button expand="block" color="tertiary"
       [routerLink]="['/answer-key', classId, subjectId]">
-      🧠 Set Answer Key
+      Set Answer Key
     </ion-button>
 
     <ion-button expand="block" color="primary"
       [routerLink]="['/scan']"
       [queryParams]="{ classId: classId, subjectId: subjectId }">
-      📷 Start Scanning
+      Start Scanning
     </ion-button>
     <div style="
       height: calc(100vh - 300px);

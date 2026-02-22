@@ -1,0 +1,284 @@
+<ion-menu side="start" menuId="main" contentId="main-content" class="teacher-menu">
+  <ion-header>
+    <ion-toolbar color="primary" class="menu-header">
+      <ion-title class="menu-title">ExamScanner</ion-title>
+    </ion-toolbar>
+  </ion-header>
+  <ion-content class="menu-content">
+    <!-- User Profile Section -->
+    <div class="user-profile-section">
+      <div class="user-avatar-container">
+        <div class="user-avatar">{{ currentUser?.name?.charAt(0)?.toUpperCase() }}</div>
+      </div>
+      <div class="user-info">
+        <h2 class="user-name">{{ currentUser?.name }}</h2>
+        <p class="user-email">{{ currentUser?.email }}</p>
+        <span class="user-role">Teacher</span>
+      </div>
+    </div>
+
+    <!-- Menu Items -->
+    <ion-list class="menu-list">
+      <ion-list-header class="menu-section-header">
+        <ion-label>Navigation</ion-label>
+      </ion-list-header>
+
+      <ion-item (click)="goToDashboard()" button class="menu-item">
+        <ion-icon name="home-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>Dashboard</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+
+      <ion-item (click)="goToClasses()" button class="menu-item">
+        <ion-icon name="school-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>My Classes</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+
+      <ion-list-header class="menu-section-header">
+        <ion-label>Tools</ion-label>
+      </ion-list-header>
+
+      <ion-item (click)="goToScan()" button class="menu-item">
+        <ion-icon name="camera-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>Scan Answers</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+
+      <ion-item (click)="goToResults()" button class="menu-item">
+        <ion-icon name="bar-chart-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>View Results</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+
+      <ion-item (click)="goToQuestionGenerator()" button class="menu-item">
+        <ion-icon name="create-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>Question Generator</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+
+      <ion-item (click)="goToAnswerKey()" button class="menu-item">
+        <ion-icon name="checkmark-circle-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>Answer Key</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+
+      <ion-item-divider class="menu-divider"></ion-item-divider>
+
+      <ion-item (click)="goToSettings()" button class="menu-item">
+        <ion-icon name="settings-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>Settings</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+
+      <ion-item-divider class="menu-divider"></ion-item-divider>
+
+      <ion-item (click)="logout()" button class="menu-item logout-item">
+        <ion-icon name="log-out-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>Logout</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+    </ion-list>
+  </ion-content>
+</ion-menu>
+
+<ion-header class="teacher-header">
+  <ion-toolbar color="primary" class="header-toolbar">
+    <ion-buttons slot="start">
+      <ion-menu-button auto-hide="false" class="menu-button"></ion-menu-button>
+    </ion-buttons>
+    <div class="header-title-section">
+      <ion-title class="header-title">Teacher Dashboard</ion-title>
+    </div>
+    <ion-buttons slot="end">
+      <ion-button (click)="refreshData()" fill="clear" class="refresh-btn">
+        <ion-icon name="refresh-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content id="main-content" class="teacher-dashboard-content">
+  <!-- Header Card -->
+  <div class="header-card">
+    <div class="greeting">
+      <h1>Welcome Back, {{ currentUser?.name }}!</h1>
+      <p>Manage your classes and exams efficiently</p>
+    </div>
+  </div>
+
+  <div *ngIf="!isLoading" class="dashboard-container">
+    <!-- Stats Section -->
+    <div class="stats-section" *ngIf="dashboardData">
+      <div class="stat-card classes">
+        <div class="stat-icon">
+          <ion-icon name="school"></ion-icon>
+        </div>
+        <div class="stat-info">
+          <h3>{{ dashboardData.totalClasses }}</h3>
+          <p>Classes</p>
+        </div>
+      </div>
+
+      <div class="stat-card students">
+        <div class="stat-icon">
+          <ion-icon name="people"></ion-icon>
+        </div>
+        <div class="stat-info">
+          <h3>{{ dashboardData.totalStudents }}</h3>
+          <p>Students</p>
+        </div>
+      </div>
+
+      <div class="stat-card subjects">
+        <div class="stat-icon">
+          <ion-icon name="book"></ion-icon>
+        </div>
+        <div class="stat-info">
+          <h3>{{ dashboardData.totalSubjects }}</h3>
+          <p>Subjects</p>
+        </div>
+      </div>
+
+      <div class="stat-card average">
+        <div class="stat-icon">
+          <ion-icon name="trending-up"></ion-icon>
+        </div>
+        <div class="stat-info">
+          <h3>{{ dashboardData.averageScore | number: '1.1-1' }}%</h3>
+          <p>Avg Score</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+      <div class="section-header">
+        <h2>Quick Actions</h2>
+      </div>
+      <div class="action-grid">
+        <div class="action-card manage-classes" (click)="goToClasses()">
+          <div class="card-icon-wrapper">
+            <ion-icon name="list" class="card-icon"></ion-icon>
+          </div>
+          <h3>Manage Classes</h3>
+          <p>View and manage your classes</p>
+        </div>
+
+        <div class="action-card scan-answers" (click)="goToScan()">
+          <div class="card-icon-wrapper">
+            <ion-icon name="camera" class="card-icon"></ion-icon>
+          </div>
+          <h3>Scan Answers</h3>
+          <p>Scan and process answer sheets</p>
+        </div>
+
+        <div class="action-card view-results" (click)="goToResults()">
+          <div class="card-icon-wrapper">
+            <ion-icon name="bar-chart" class="card-icon"></ion-icon>
+          </div>
+          <h3>View Results</h3>
+          <p>Check scanned results</p>
+        </div>
+
+        <div class="action-card generator" (click)="goToQuestionGenerator()">
+          <div class="card-icon-wrapper">
+            <ion-icon name="create" class="card-icon"></ion-icon>
+          </div>
+          <h3>Question Generator</h3>
+          <p>Create exam questions</p>
+        </div>
+
+        <div class="action-card answer-key" (click)="goToAnswerKey()">
+          <div class="card-icon-wrapper">
+            <ion-icon name="checkmark-circle" class="card-icon"></ion-icon>
+          </div>
+          <h3>Answer Key</h3>
+          <p>Create and manage keys</p>
+        </div>
+
+        <div class="action-card reports">
+          <div class="card-icon-wrapper">
+            <ion-icon name="download" class="card-icon"></ion-icon>
+          </div>
+          <h3>Generate Report</h3>
+          <p>Export performance reports</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Your Classes Section -->
+    <div class="your-classes-section" *ngIf="dashboardData && dashboardData.classes.length > 0">
+      <div class="section-header">
+        <h2>Your Classes</h2>
+        <ion-button fill="clear" size="small" color="primary" (click)="goToClasses()">
+          View All
+        </ion-button>
+      </div>
+      <div class="classes-list">
+        <ion-card #classCard *ngFor="let cls of dashboardData.classes" class="class-item-card" [attr.data-class-id]="cls.id" (click)="onClassCardClick(cls.id)">
+          <ion-card-header class="class-card-header">
+            <div class="class-header-content">
+              <ion-card-title class="class-title">{{ cls.name }}</ion-card-title>
+              <p class="class-meta" *ngIf="cls.grade_level">Grade {{ cls.grade_level }}</p>
+            </div>
+            <div class="student-badge">
+              <ion-icon name="people"></ion-icon>
+              <span>{{ cls.student_count }}</span>
+            </div>
+          </ion-card-header>
+          
+          <ion-card-content class="class-card-content">
+            <!-- Subjects -->
+            <div class="class-section" *ngIf="cls.subjects && cls.subjects.length > 0">
+              <div class="section-label">
+                <ion-icon name="book-outline"></ion-icon>
+                <span>Subjects ({{ cls.subjects.length }})</span>
+              </div>
+              <div class="subjects-display">
+                <div class="subject-item" *ngFor="let subject of cls.subjects | slice:0:3">
+                  <span class="subject-name">{{ subject.name }}</span>
+                  <span class="subject-code" *ngIf="subject.code">({{ subject.code }})</span>
+                </div>
+                <p class="more-subjects" *ngIf="cls.subjects.length > 3">
+                  +{{ cls.subjects.length - 3 }} more
+                </p>
+              </div>
+            </div>
+
+            <!-- No Subjects -->
+            <div class="empty-state" *ngIf="!cls.subjects || cls.subjects.length === 0">
+              <ion-text color="medium">
+                <small>No subjects assigned yet</small>
+              </ion-text>
+            </div>
+          </ion-card-content>
+
+          <div class="class-card-footer">
+            <ion-button fill="clear" size="small" color="primary">
+              <ion-icon name="arrow-forward" slot="end"></ion-icon>
+              View Class
+            </ion-button>
+          </div>
+        </ion-card>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="dashboardData && dashboardData.classes.length === 0" class="empty-state-container">
+      <ion-icon name="folder-open"></ion-icon>
+      <h3>No Classes Yet</h3>
+      <p>You haven't created any classes. Start by creating your first class!</p>
+      <ion-button color="primary" expand="block" (click)="goToClasses()">
+        <ion-icon name="add-circle" slot="start"></ion-icon>
+        Create Your First Class
+      </ion-button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="isLoading" class="loading-container">
+    <ion-spinner name="crescent"></ion-spinner>
+    <p>Loading your dashboard...</p>
+  </div>
+</ion-content>

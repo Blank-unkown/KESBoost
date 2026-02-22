@@ -1,10 +1,12 @@
 import { Component, OnInit } from '@angular/core';
-import { NavController } from '@ionic/angular';
+import { NavController, MenuController, AlertController, ToastController } from '@ionic/angular';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { IonicModule } from '@ionic/angular';
 import { ActivatedRoute, Router } from '@angular/router';
-import { LocalDataService, Subject, ScannedResult } from '../../services/local-data.service';
+import { LocalDataService, ScannedResult } from '../../services/local-data.service';
+import { AuthService, User } from '../../services/auth.service';
+import { TeacherService, Subject } from '../../services/teacher.service';
 import Chart from 'chart.js/auto';
 
 @Component({
@@ -19,6 +21,11 @@ export class SubjectListPage implements OnInit {
   subjectId!: number;
   subjects: Subject[] = [];
   subjectName = '';
+  subjectCode = '';
+  subjectDescription = '';
+  subjectTotalMarks: number | null = 100;
+  isSaving = false;
+  currentUser: User | null = null;
 
   results: ScannedResult[] = [];
   meanPercentage = 0;
@@ -38,28 +45,86 @@ export class SubjectListPage implements OnInit {
     private route: ActivatedRoute,
     private navCtrl: NavController,
     private router: Router,
-  ) {}
-
-  ngOnInit() {
-    this.classId = Number(this.route.snapshot.paramMap.get('id'));
-    const cls = LocalDataService.getClass(this.classId);
-    this.subjects = cls?.subjects || [];
+    private authService: AuthService,
+    private teacherService: TeacherService,
+    private menuController: MenuController,
+    private alertController: AlertController,
+    private toastController: ToastController
+  ) {
+    this.currentUser = this.authService.getCurrentUser();
   }
 
-  addSubject() {
-    if (this.subjectName.trim()) {
-      LocalDataService.addSubject(this.classId, this.subjectName);
-      const cls = LocalDataService.getClass(this.classId);
-      this.subjects = cls?.subjects || [];
-      this.subjectName = '';
+  async ngOnInit() {
+    this.classId = Number(this.route.snapshot.paramMap.get('id'));
+    await this.loadSubjects();
+  }
+
+  async loadSubjects() {
+    try {
+      this.subjects = await this.teacherService.getClassSubjects(this.classId);
+    } catch (err) {
+      await this.showToast('Failed to load subjects', 'danger');
+      console.error('Failed to load subjects:', err);
     }
   }
 
-  deleteSubject(subjectId: number) {
-    if (confirm('Are you sure you want to delete this subject?')) {
-      LocalDataService.deleteSubject(this.classId, subjectId);
-      const cls = LocalDataService.getClass(this.classId);
-      this.subjects = cls?.subjects || [];
+  openStudents(subject: Subject) {
+    this.navCtrl.navigateForward(`/class-students/${this.classId}/${subject.id}`, {
+      queryParams: {
+        subjectName: subject.name
+      }
+    });
+  }
+
+  async addSubject() {
+    if (!this.subjectName.trim()) {
+      await this.showToast('Please enter a subject name', 'warning');
+      return;
+    }
+
+    this.isSaving = true;
+    try {
+      const result = await this.teacherService.createSubject({
+        name: this.subjectName.trim(),
+        code: this.subjectCode.trim() || undefined,
+        class_id: this.classId,
+        description: this.subjectDescription.trim() || undefined,
+        total_marks: this.subjectTotalMarks ?? undefined
+      });
+
+      if (result.success && result.subject) {
+        await this.showToast('Subject added successfully!', 'success');
+        this.subjectName = '';
+        this.subjectCode = '';
+        this.subjectDescription = '';
+        this.subjectTotalMarks = 100;
+        await this.loadSubjects();
+      } else {
+        await this.showToast(result.error || 'Failed to add subject', 'danger');
+      }
+    } catch (err) {
+      await this.showToast('Error adding subject', 'danger');
+      console.error('Error adding subject:', err);
+    } finally {
+      this.isSaving = false;
+    }
+  }
+
+  async deleteSubject(subjectId: number) {
+    const confirmed = confirm('Are you sure you want to delete this subject?');
+    if (!confirmed) return;
+
+    try {
+      const result = await this.teacherService.deleteSubject(this.classId, subjectId);
+      if (result.success) {
+        await this.showToast('Subject deleted successfully!', 'success');
+        await this.loadSubjects();
+      } else {
+        await this.showToast(result.error || 'Failed to delete subject', 'danger');
+      }
+    } catch (err) {
+      await this.showToast('Error deleting subject', 'danger');
+      console.error('Error deleting subject:', err);
     }
   }
 
@@ -300,6 +365,68 @@ renderCompetencyChart() {
       },
     },
   });
+}
+
+// Navigation Methods
+goToDashboard() {
+  this.menuController.close();
+  this.navCtrl.navigateRoot('/teacher-dashboard');
+}
+
+goToClasses() {
+  this.menuController.close();
+  this.navCtrl.navigateRoot('/class-list');
+}
+
+goToScan() {
+  this.menuController.close();
+  this.navCtrl.navigateForward('/scan');
+}
+
+goToResults() {
+  this.menuController.close();
+  this.navCtrl.navigateForward('/resultviewer');
+}
+
+goToSettings() {
+  this.menuController.close();
+  this.navCtrl.navigateForward('/teacher-settings');
+}
+
+closeMenu() {
+  this.menuController.close();
+}
+
+async logout() {
+  const alert = await this.alertController.create({
+    header: 'Confirm Logout',
+    message: 'Are you sure you want to logout?',
+    buttons: [
+      {
+        text: 'Cancel',
+        role: 'cancel'
+      },
+      {
+        text: 'Logout',
+        handler: async () => {
+          await this.authService.logout();
+          this.navCtrl.navigateRoot('/login');
+        }
+      }
+    ]
+  });
+
+  await alert.present();
+}
+
+private async showToast(message: string, color: string) {
+  const toast = await this.toastController.create({
+    message,
+    duration: 2000,
+    color,
+    position: 'top'
+  });
+  await toast.present();
 }
 
 }

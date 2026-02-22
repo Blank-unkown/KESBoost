@@ -1,0 +1,342 @@
+/* Sidebar Menu */
+.sidebar-menu {
+  --width: 280px;
+  --background: linear-gradient(180deg, #f5f7fa 0%, #ffffff 100%);
+
+  ion-header {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+    .menu-header-toolbar {
+      --background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding-top: 12px;
+      padding-bottom: 12px;
+
+      .menu-title {
+        font-weight: 700;
+        font-size: 22px;
+        letter-spacing: -0.3px;
+      }
+    }
+  }
+}
+
+.menu-content {
+  --padding-top: 0;
+  --padding-bottom: 0;
+  --padding-start: 0;
+  --padding-end: 0;
+  background: linear-gradient(180deg, #f5f7fa 0%, #ffffff 100%);
+}
+
+.menu-list {
+  padding: 0;
+
+  .menu-profile-section {
+    padding: 24px 16px;
+    text-align: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+
+    .profile-avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0 auto 12px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .profile-name {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 4px 0;
+      letter-spacing: -0.3px;
+    }
+
+    .profile-email {
+      font-size: 13px;
+      opacity: 0.85;
+      margin: 0;
+      font-weight: 500;
+    }
+  }
+
+  .menu-divider {
+    background: linear-gradient(90deg, transparent 0%, #e0e0e0 50%, transparent 100%);
+    height: 1px;
+    border: none;
+    margin: 8px 0;
+  }
+
+  .menu-item {
+    --padding-start: 16px;
+    --padding-end: 16px;
+    --inner-padding-start: 0;
+    --inner-padding-end: 0;
+    margin: 6px 12px;
+    border-radius: 12px;
+    --background: transparent;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    height: 52px;
+
+    ion-label {
+      font-weight: 500;
+      color: #333;
+      font-size: 15px;
+      letter-spacing: 0.2px;
+      padding-left: 12px;
+    }
+
+    .menu-icon {
+      font-size: 22px;
+      color: #667eea;
+      margin-right: 4px;
+    }
+
+    .chevron {
+      font-size: 20px;
+      color: #999;
+    }
+
+    &:hover {
+      --background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    }
+
+    &.active {
+      --background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+      border-left: 4px solid #667eea;
+      --padding-start: 12px;
+
+      ion-label {
+        color: #667eea;
+        font-weight: 700;
+      }
+
+      .menu-icon {
+        color: #667eea;
+      }
+    }
+
+    &.logout-item {
+      margin-top: 12px;
+
+      ion-label {
+        color: #e74c3c;
+      }
+
+      .menu-icon {
+        color: #e74c3c;
+      }
+
+      &:hover {
+        --background: rgba(231, 76, 60, 0.1);
+      }
+    }
+  }
+}
+
+.menu-button {
+  --padding-start: 8px;
+  --padding-end: 8px;
+}
+
+/* Header */
+.custom-header {
+  .header-toolbar {
+    --background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding-bottom: 8px;
+
+    .header-title {
+      font-weight: 700;
+      font-size: 24px;
+      letter-spacing: -0.5px;
+    }
+  }
+}
+
+/* Content */
+.subject-list-content {
+  --padding-top: 16px;
+  --padding-bottom: 16px;
+  --padding-start: 16px;
+  --padding-end: 16px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+  min-height: 100vh;
+}
+
+.add-subject-card {
+  margin: 0 0 16px 0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+
+  ion-card-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+
+    ion-card-title {
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: -0.2px;
+    }
+
+    ion-card-subtitle {
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 500;
+    }
+  }
+
+  ion-card-content {
+    padding-top: 14px;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+
+    .form-item {
+      --background: rgba(255, 255, 255, 0.95);
+      --border-radius: 12px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+
+      ion-label {
+        font-weight: 700;
+        font-size: 12px;
+        color: #374151;
+      }
+
+      ion-input,
+      ion-textarea {
+        --padding-start: 12px;
+        --padding-end: 12px;
+        font-weight: 600;
+        color: #111827;
+      }
+    }
+
+    .span-2 {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .save-btn {
+    --border-radius: 12px;
+    height: 44px;
+    font-weight: 700;
+  }
+}
+
+.subjects-list {
+  background: transparent;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+:host {
+  --subject-card-bg: #ffffff;
+  --subject-card-header-bg: #f8fafc;
+  --subject-card-border: rgba(2, 6, 23, 0.10);
+  --subject-card-title: #0f172a;
+  --subject-card-subtitle: #475569;
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --subject-card-bg: #111827;
+    --subject-card-header-bg: #0b1220;
+    --subject-card-border: rgba(255, 255, 255, 0.10);
+    --subject-card-title: #f9fafb;
+    --subject-card-subtitle: #cbd5e1;
+  }
+}
+
+.subject-card {
+  margin: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--subject-card-border);
+  background: var(--subject-card-bg);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.subject-card-header {
+  background: var(--subject-card-header-bg);
+  padding-bottom: 10px;
+}
+
+.subject-card-title {
+  font-weight: 900;
+  font-size: 18px;
+  letter-spacing: -0.2px;
+  color: var(--subject-card-title);
+}
+
+.subject-card-subtitle {
+  margin-top: 6px;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--subject-card-subtitle);
+  white-space: normal;
+  word-break: break-word;
+}
+
+.subject-card-content {
+  padding-top: 0;
+}
+
+.subject-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+
+  ion-button {
+    margin: 0;
+    --border-radius: 10px;
+    height: 40px;
+    font-weight: 900;
+    text-transform: none;
+  }
+
+  .action-btn {
+    --padding-start: 10px;
+    --padding-end: 10px;
+    font-size: 12px;
+    letter-spacing: 0.2px;
+
+    ion-icon {
+      font-size: 16px;
+    }
+  }
+
+  ion-button[color="danger"] {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .add-subject-card {
+    .form-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .subject-actions-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 360px) {
+  .subject-actions-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,35 +1,161 @@
-<ion-header>
-  <ion-toolbar>
+<ion-menu contentId="main-content" class="sidebar-menu">
+  <ion-header>
+    <ion-toolbar color="primary" class="menu-header-toolbar">
+      <ion-title class="menu-title">Menu</ion-title>
+    </ion-toolbar>
+  </ion-header>
+
+  <ion-content class="menu-content">
+    <ion-list class="menu-list">
+      <!-- User Profile Section -->
+      <div class="menu-profile-section">
+        <div class="profile-avatar">{{ currentUser?.name?.charAt(0)?.toUpperCase() }}</div>
+        <h3 class="profile-name">{{ currentUser?.name }}</h3>
+        <p class="profile-email">{{ currentUser?.email }}</p>
+      </div>
+
+      <ion-item-divider class="menu-divider"></ion-item-divider>
+
+      <!-- Navigation Items -->
+      <ion-item (click)="goToDashboard()" button class="menu-item">
+        <ion-icon name="home-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>Dashboard</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+
+      <ion-item (click)="goToClasses()" button class="menu-item">
+        <ion-icon name="folder-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>My Classes</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+
+      <ion-item (click)="closeMenu()" button class="menu-item active">
+        <ion-icon name="book-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>Subjects</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+
+      <ion-item (click)="goToScan()" button class="menu-item">
+        <ion-icon name="camera-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>Scan</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+
+      <ion-item (click)="goToResults()" button class="menu-item">
+        <ion-icon name="bar-chart-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>Results</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+
+      <ion-item-divider class="menu-divider"></ion-item-divider>
+
+      <ion-item (click)="goToSettings()" button class="menu-item">
+        <ion-icon name="settings-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>Settings</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+
+      <ion-item-divider class="menu-divider"></ion-item-divider>
+
+      <ion-item (click)="logout()" button class="menu-item logout-item">
+        <ion-icon name="log-out-outline" slot="start" class="menu-icon"></ion-icon>
+        <ion-label>Logout</ion-label>
+        <ion-icon name="chevron-forward-outline" slot="end" class="chevron"></ion-icon>
+      </ion-item>
+    </ion-list>
+  </ion-content>
+</ion-menu>
+
+<ion-header class="custom-header">
+  <ion-toolbar color="primary" class="header-toolbar">
     <ion-buttons slot="start">
-      <ion-back-button defaultHref="/dashboard"></ion-back-button>
+      <ion-menu-button auto-hide="false" class="menu-button"></ion-menu-button>
     </ion-buttons>
-    <ion-title>Subjects</ion-title>
+    <ion-title class="header-title">Subjects</ion-title>
+    <ion-buttons slot="end">
+      <ion-back-button defaultHref="/class-list"></ion-back-button>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
-<ion-content class="ion-padding">
+<ion-content id="main-content" class="subject-list-content">
   <!-- Add Subject -->
-  <ion-input [(ngModel)]="subjectName" placeholder="Enter subject name"></ion-input>
-  <ion-button expand="full" (click)="addSubject()">Add Subject</ion-button>
+  <ion-card class="add-subject-card">
+    <ion-card-header>
+      <ion-card-title>Add Subject</ion-card-title>
+      <ion-card-subtitle>Fill in the details and save</ion-card-subtitle>
+    </ion-card-header>
+    <ion-card-content>
+      <div class="form-grid">
+        <ion-item class="form-item" lines="none">
+          <ion-label position="stacked">Subject Name</ion-label>
+          <ion-input [(ngModel)]="subjectName" placeholder="e.g. Mathematics" [disabled]="isSaving"></ion-input>
+        </ion-item>
+
+        <ion-item class="form-item" lines="none">
+          <ion-label position="stacked">Code (optional)</ion-label>
+          <ion-input [(ngModel)]="subjectCode" placeholder="e.g. MATH101" [disabled]="isSaving"></ion-input>
+        </ion-item>
+
+        <ion-item class="form-item" lines="none">
+          <ion-label position="stacked">Total Marks</ion-label>
+          <ion-input type="number" [(ngModel)]="subjectTotalMarks" placeholder="100" [disabled]="isSaving"></ion-input>
+        </ion-item>
+
+        <ion-item class="form-item span-2" lines="none">
+          <ion-label position="stacked">Description (optional)</ion-label>
+          <ion-textarea autoGrow="true" [(ngModel)]="subjectDescription" placeholder="Short description" [disabled]="isSaving"></ion-textarea>
+        </ion-item>
+      </div>
+
+      <ion-button expand="block" class="save-btn" (click)="addSubject()" [disabled]="isSaving">
+        <ion-spinner *ngIf="isSaving" name="crescent" slot="start"></ion-spinner>
+        Save Subject
+      </ion-button>
+    </ion-card-content>
+  </ion-card>
 
   <!-- Subject List -->
-  <ion-list>
-    <ion-item *ngFor="let sub of subjects">
-      <ion-label (click)="goToTOS(sub.id)">
-        {{ sub.name }}
-      </ion-label>
-      <ion-button slot="end" fill="outline" (click)="goToScannedResults(sub.id)">
-        View Students
-      </ion-button>
-      <ion-button slot="end" fill="outline" color="secondary" (click)="toggleAnalysis()"
-                  *ngIf="results.length > 0 && subjectId === sub.id">
-        {{ showAnalysis ? 'Hide Analysis' : 'Show Analysis' }}
-      </ion-button>
-      <ion-button slot="end" color="danger" (click)="deleteSubject(sub.id)">
-        Delete
-      </ion-button>
-    </ion-item>
-  </ion-list>
+  <div class="subjects-list">
+    <ion-card *ngFor="let sub of subjects" class="subject-card" (click)="goToTOS(sub.id)">
+      <ion-card-header class="subject-card-header">
+        <ion-card-title class="subject-card-title">{{ sub.name }}</ion-card-title>
+        <ion-card-subtitle class="subject-card-subtitle">
+          <span *ngIf="sub.code">{{ sub.code }}</span>
+          <span *ngIf="sub.total_marks"> • {{ sub.total_marks }} marks</span>
+          <span *ngIf="sub.student_count !== undefined"> • {{ sub.student_count }} students</span>
+        </ion-card-subtitle>
+      </ion-card-header>
+
+      <ion-card-content class="subject-card-content">
+        <div class="subject-actions-grid">
+          <ion-button class="action-btn" expand="block" fill="outline" (click)="$event.stopPropagation(); openStudents(sub)">
+            <ion-icon slot="start" name="people-outline"></ion-icon>
+            Students
+          </ion-button>
+          <ion-button class="action-btn" expand="block" fill="outline" color="tertiary" (click)="$event.stopPropagation(); goToScannedResults(sub.id)">
+            <ion-icon slot="start" name="scan-outline"></ion-icon>
+            Scans
+          </ion-button>
+          <ion-button
+            class="action-btn"
+            expand="block"
+            fill="outline"
+            color="secondary"
+            (click)="$event.stopPropagation(); toggleAnalysis()"
+            *ngIf="results.length > 0 && subjectId === sub.id"
+          >
+            <ion-icon slot="start" name="analytics-outline"></ion-icon>
+            {{ showAnalysis ? 'Hide' : 'Analysis' }}
+          </ion-button>
+          <ion-button class="action-btn" expand="block" color="danger" (click)="$event.stopPropagation(); deleteSubject(sub.id)">
+            <ion-icon slot="start" name="trash-outline"></ion-icon>
+            Delete
+          </ion-button>
+        </div>
+      </ion-card-content>
+    </ion-card>
+  </div>
    
 
   <!-- Student Results -->

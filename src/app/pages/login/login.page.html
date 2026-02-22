@@ -1,0 +1,87 @@
+<ion-header class="login-header">
+  <ion-toolbar>
+    <ion-title>Login</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="login-content">
+  <div class="login-container">
+    <div class="logo-section">
+      <h1>Welcome</h1>
+      <p>Teacher Exam Scanning System</p>
+    </div>
+
+    <form (ngSubmit)="login()" class="login-form">
+      <!-- Email Input -->
+      <ion-item class="input-item">
+        <ion-label position="floating">Email Address</ion-label>
+        <ion-input
+          type="email"
+          [(ngModel)]="email"
+          name="email"
+          placeholder="Enter your email"
+          required
+        ></ion-input>
+        <ion-icon slot="start" name="mail-outline"></ion-icon>
+      </ion-item>
+
+      <!-- Password Input -->
+      <ion-item class="input-item">
+        <ion-label position="floating">Password</ion-label>
+        <ion-input
+          [type]="showPassword ? 'text' : 'password'"
+          [(ngModel)]="password"
+          name="password"
+          placeholder="Enter your password"
+          required
+        ></ion-input>
+        <ion-icon slot="start" name="lock-closed-outline"></ion-icon>
+        <ion-button
+          slot="end"
+          fill="clear"
+          (click)="togglePasswordVisibility()"
+          class="toggle-password"
+        >
+          <ion-icon [name]="showPassword ? 'eye-off-outline' : 'eye-outline'"></ion-icon>
+        </ion-button>
+      </ion-item>
+
+      <!-- Login Button -->
+      <ion-button
+        expand="block"
+        type="submit"
+        class="login-button"
+        [disabled]="isLoading"
+      >
+        <ion-spinner *ngIf="isLoading" name="crescent"></ion-spinner>
+        <span *ngIf="!isLoading">Login</span>
+      </ion-button>
+    </form>
+
+    <!-- Register Link -->
+    <div class="register-link">
+      <p>Don't have an account?</p>
+      <ion-button
+        fill="clear"
+        (click)="goToRegister()"
+        class="register-btn"
+      >
+        Register here
+      </ion-button>
+    </div>
+
+    <!-- Info Cards -->
+    <div class="info-cards">
+      <div class="info-card">
+        <ion-icon name="person-outline"></ion-icon>
+        <h3>For Teachers</h3>
+        <p>Scan answer sheets and track student performance</p>
+      </div>
+      <div class="info-card">
+        <ion-icon name="school-outline"></ion-icon>
+        <h3>For Schools</h3>
+        <p>Manage classes, subjects, and student data</p>
+      </div>
+    </div>
+  </div>
+</ion-content>
