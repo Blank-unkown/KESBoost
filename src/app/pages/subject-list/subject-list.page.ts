@@ -54,6 +54,29 @@ export class SubjectListPage implements OnInit {
     this.currentUser = this.authService.getCurrentUser();
   }
 
+  private async presentAlert(message: string, header = '') {
+    const alert = await this.alertController.create({
+      header,
+      message,
+      buttons: ['OK'],
+    });
+    await alert.present();
+  }
+
+  private async presentConfirm(message: string, header = ''): Promise<boolean> {
+    const alert = await this.alertController.create({
+      header,
+      message,
+      buttons: [
+        { text: 'Cancel', role: 'cancel' },
+        { text: 'Delete', role: 'confirm' },
+      ],
+    });
+    await alert.present();
+    const res = await alert.onDidDismiss();
+    return res.role === 'confirm';
+  }
+
   async ngOnInit() {
     this.classId = Number(this.route.snapshot.paramMap.get('id'));
     await this.loadSubjects();
@@ -111,7 +134,7 @@ export class SubjectListPage implements OnInit {
   }
 
   async deleteSubject(subjectId: number) {
-    const confirmed = confirm('Are you sure you want to delete this subject?');
+    const confirmed = await this.presentConfirm('Are you sure you want to delete this subject?');
     if (!confirmed) return;
 
     try {
@@ -137,7 +160,7 @@ export class SubjectListPage implements OnInit {
     this.results = LocalDataService.getResultsBySubject(this.classId, subjectId);
 
     if (this.results.length === 0) {
-      alert('No scanned results found for this subject.');
+      void this.presentAlert('No scanned results found for this subject.');
     }
     this.showAnalysis = false;
   }
@@ -150,14 +173,15 @@ export class SubjectListPage implements OnInit {
   }
 
   deleteScan(resultId: number) {
-    if (confirm('Are you sure you want to delete this scanned result?')) {
+    void this.presentConfirm('Are you sure you want to delete this scanned result?').then((ok) => {
+      if (!ok) return;
       const subject = LocalDataService.getSubject(this.classId, this.subjectId);
       if (subject?.results) {
         subject.results = subject.results.filter(r => r.id !== resultId);
         LocalDataService.save();
         this.goToScannedResults(this.subjectId);
       }
-    }
+    });
   }
 
   viewScan(scan: ScannedResult) {

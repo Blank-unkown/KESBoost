@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { IonicModule } from '@ionic/angular';
+import { AlertController, IonicModule } from '@ionic/angular';
 import { LocalDataService, TopicEntry } from '../../services/local-data.service';
 import { httpsCallable } from 'firebase/functions';
 import { firebaseFunctions } from '../../firebase';
@@ -41,8 +41,32 @@ export class QuestionGeneratorPage implements OnInit {
 
   constructor(
     private route: ActivatedRoute,
-    private teacherService: TeacherService
+    private teacherService: TeacherService,
+    private alertController: AlertController
   ) {}
+
+  private async presentAlert(message: string, header = '') {
+    const alert = await this.alertController.create({
+      header,
+      message,
+      buttons: ['OK'],
+    });
+    await alert.present();
+  }
+
+  private async presentConfirm(message: string, header = ''): Promise<boolean> {
+    const alert = await this.alertController.create({
+      header,
+      message,
+      buttons: [
+        { text: 'Cancel', role: 'cancel' },
+        { text: 'Delete', role: 'confirm' },
+      ],
+    });
+    await alert.present();
+    const res = await alert.onDidDismiss();
+    return res.role === 'confirm';
+  }
 
   private normalizeTosRow(row: any): TopicEntry | null {
     if (!row || typeof row !== 'object') return null;
@@ -76,7 +100,9 @@ export class QuestionGeneratorPage implements OnInit {
     this.subjectId = Number(this.route.snapshot.paramMap.get('subjectId'));
 
     if (!Number.isFinite(this.classId) || !Number.isFinite(this.subjectId)) {
-      alert('Missing class/subject. Please go back to TOS and open Question Generator again.');
+      await this.presentAlert(
+        'Missing class/subject. Please go back to TOS and open Question Generator again.'
+      );
       return;
     }
 
@@ -120,7 +146,9 @@ export class QuestionGeneratorPage implements OnInit {
     }
 
     if (!this.topicOptions.length) {
-      alert('No topics found. Please add and Save TOS first, then open Question Generator again.');
+      await this.presentAlert(
+        'No topics found. Please add and Save TOS first, then open Question Generator again.'
+      );
       return;
     }
 
@@ -181,7 +209,7 @@ export class QuestionGeneratorPage implements OnInit {
     try {
       const res = await this.teacherService.loadSubjectTos(this.classId, this.subjectId);
       if (!res.success) {
-        alert(res.error || 'Failed to load TOS from Firebase');
+        await this.presentAlert(res.error || 'Failed to load TOS from Firebase');
         return;
       }
 
@@ -219,7 +247,7 @@ export class QuestionGeneratorPage implements OnInit {
       }
     } catch (e) {
       console.error(e);
-      alert((e as any)?.message || 'Failed to load TOS from Firebase');
+      await this.presentAlert((e as any)?.message || 'Failed to load TOS from Firebase');
     } finally {
       this.isLoadingTos = false;
     }
@@ -362,7 +390,7 @@ export class QuestionGeneratorPage implements OnInit {
     if (this.isPromptingAI) return;
     const prompt = String(this.promptText || '').trim();
     if (!prompt) {
-      alert('Type your prompt first.');
+      await this.presentAlert('Type your prompt first.');
       return;
     }
 
@@ -412,7 +440,7 @@ export class QuestionGeneratorPage implements OnInit {
 
       if (!mapped.length) {
         const fallbackText = rawTextItems.length ? rawTextItems.join('\n\n') : 'No questions returned.';
-        alert(fallbackText);
+        await this.presentAlert(fallbackText);
         this.chatMessages = [
           ...this.chatMessages,
           { role: 'gemini', text: fallbackText, ts: Date.now() },
@@ -436,14 +464,14 @@ export class QuestionGeneratorPage implements OnInit {
           'Gemini quota/rate limit exceeded.\n' +
           'You can still use the locally-generated MCQs for now.\n' +
           'Please wait a bit and try again, or check Gemini API quota/billing.';
-        alert(msg);
+        await this.presentAlert(msg);
         this.chatMessages = [
           ...this.chatMessages,
           { role: 'gemini', text: msg, ts: Date.now() },
         ];
       } else {
         const msg = [code, message, details].filter(Boolean).join('\n');
-        alert(msg);
+        await this.presentAlert(msg);
         this.chatMessages = [
           ...this.chatMessages,
           { role: 'gemini', text: msg, ts: Date.now() },
@@ -458,7 +486,7 @@ export class QuestionGeneratorPage implements OnInit {
     if (this.isGeneratingAI) return;
 
     if (!this.questions.length) {
-      alert('No questions to generate.');
+      await this.presentAlert('No questions to generate.');
       return;
     }
 
@@ -518,13 +546,13 @@ export class QuestionGeneratorPage implements OnInit {
       const details = e?.details ? (typeof e.details === 'string' ? e.details : JSON.stringify(e.details)) : '';
 
       if (code === 'functions/resource-exhausted') {
-        alert(
+        await this.presentAlert(
           'Gemini quota/rate limit exceeded.\n' +
           'Keeping your current (template) MCQs.\n' +
           'Please wait a bit and try again, or check Gemini API quota/billing.'
         );
       } else {
-        alert([code, message, details].filter(Boolean).join('\n'));
+        await this.presentAlert([code, message, details].filter(Boolean).join('\n'));
       }
     } finally {
       this.isGeneratingAI = false;
@@ -535,7 +563,7 @@ export class QuestionGeneratorPage implements OnInit {
     try {
       const res = await this.teacherService.saveSubjectQuestions(this.classId, this.subjectId, this.questions);
       if (!res.success) {
-        alert(res.error || 'Failed to save questions');
+        await this.presentAlert(res.error || 'Failed to save questions');
         return;
       }
 
@@ -544,15 +572,15 @@ export class QuestionGeneratorPage implements OnInit {
         subject.questions = this.questions;
         await LocalDataService.save();
       }
-      alert('Questions saved to Firebase!');
+      await this.presentAlert('Questions saved to Firebase!');
     } catch (e: any) {
-      alert(e?.message || 'Failed to save questions');
+      await this.presentAlert(e?.message || 'Failed to save questions');
     }
   }
 
-  deleteQuestion(index: number) {
+  async deleteQuestion(index: number) {
     if (!Number.isFinite(index) || index < 0 || index >= this.questions.length) return;
-    const ok = confirm('Delete this question?');
+    const ok = await this.presentConfirm('Delete this question?');
     if (!ok) return;
     this.questions = this.questions.filter((_, i) => i !== index);
   }

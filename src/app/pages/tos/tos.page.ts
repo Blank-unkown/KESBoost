@@ -3,6 +3,7 @@ import { NavController } from '@ionic/angular';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { IonicModule } from '@ionic/angular';
+import { AlertController } from '@ionic/angular';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { LocalDataService, TopicEntry } from '../../services/local-data.service';
 import { AnswerSheetGeneratorPage } from '../answer-sheet-generator/answer-sheet-generator.page';
@@ -32,8 +33,18 @@ getTotal(field: keyof TopicEntry): number {
 
   constructor(
     private route: ActivatedRoute,
-    private teacherService: TeacherService
+    private teacherService: TeacherService,
+    private alertController: AlertController
   ) {}
+
+  private async presentAlert(message: string, header = '') {
+    const alert = await this.alertController.create({
+      header,
+      message,
+      buttons: ['OK'],
+    });
+    await alert.present();
+  }
 
   async ngOnInit() {
     await LocalDataService.load();
@@ -143,15 +154,15 @@ getTotal(field: keyof TopicEntry): number {
 
       const res = await this.teacherService.saveSubjectTos(this.classId, this.subjectId, payload);
       if (!res.success) {
-        alert(res.error || 'Failed to save TOS');
+        await this.presentAlert(res.error || 'Failed to save TOS');
         return;
       }
 
       LocalDataService.saveTOS(this.classId, this.subjectId, payload);
       await LocalDataService.save();
-      alert('TOS saved!');
+      await this.presentAlert('TOS saved!');
     } catch (err: any) {
-      alert(err?.message || 'Failed to save TOS');
+      await this.presentAlert(err?.message || 'Failed to save TOS');
     } finally {
       this.isSavingTos = false;
     }
