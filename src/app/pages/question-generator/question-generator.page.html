@@ -22,6 +22,18 @@
           </ion-select>
         </ion-item>
 
+        <ion-item lines="none" class="topic-item">
+          <ion-label position="stacked">Generate</ion-label>
+          <ion-segment [(ngModel)]="topicViewMode" (ionChange)="onTopicViewModeChange()">
+            <ion-segment-button value="all">
+              <ion-label>All Topics</ion-label>
+            </ion-segment-button>
+            <ion-segment-button value="selected">
+              <ion-label>Selected</ion-label>
+            </ion-segment-button>
+          </ion-segment>
+        </ion-item>
+
         <div class="actions">
           <ion-button class="action" color="primary" [disabled]="isGeneratingAI" (click)="generateWithAI()">
             <ion-spinner *ngIf="isGeneratingAI" name="crescent" style="margin-right: 8px;"></ion-spinner>
@@ -31,12 +43,16 @@
           <ion-button class="action" color="success" (click)="saveQuestions()">
             Save
           </ion-button>
+
+          <ion-button class="action" color="medium" (click)="printQuestions()">
+            Print
+          </ion-button>
         </div>
       </ion-card-content>
     </ion-card>
 
     <div class="question-list">
-      <ion-card class="question-card" *ngFor="let q of questions; let i = index">
+      <ion-card class="question-card" *ngFor="let q of displayQuestions; let i = index">
         <ion-card-content>
           <div class="meta">
             <ion-chip color="primary" class="meta-chip meta-chip--num">
@@ -49,7 +65,7 @@
               <ion-label>{{ q.level }}</ion-label>
             </ion-chip>
 
-            <ion-button fill="clear" color="danger" size="small" (click)="deleteQuestion(i)">
+            <ion-button fill="clear" color="danger" size="small" (click)="deleteQuestion(q)">
               Delete
             </ion-button>
           </div>
@@ -63,34 +79,34 @@
             fill="outline"
             label="Question"
             labelPlacement="stacked"
-            [(ngModel)]="questions[i].question"
+            [(ngModel)]="displayQuestions[i].question"
           ></ion-textarea>
 
           <div class="choices">
             <ion-item lines="none" class="choice-item">
               <ion-label position="stacked">A</ion-label>
-              <ion-input [(ngModel)]="questions[i].choices.A"></ion-input>
+              <ion-input [(ngModel)]="displayQuestions[i].choices.A"></ion-input>
             </ion-item>
 
             <ion-item lines="none" class="choice-item">
               <ion-label position="stacked">B</ion-label>
-              <ion-input [(ngModel)]="questions[i].choices.B"></ion-input>
+              <ion-input [(ngModel)]="displayQuestions[i].choices.B"></ion-input>
             </ion-item>
 
             <ion-item lines="none" class="choice-item">
               <ion-label position="stacked">C</ion-label>
-              <ion-input [(ngModel)]="questions[i].choices.C"></ion-input>
+              <ion-input [(ngModel)]="displayQuestions[i].choices.C"></ion-input>
             </ion-item>
 
             <ion-item lines="none" class="choice-item">
               <ion-label position="stacked">D</ion-label>
-              <ion-input [(ngModel)]="questions[i].choices.D"></ion-input>
+              <ion-input [(ngModel)]="displayQuestions[i].choices.D"></ion-input>
             </ion-item>
           </div>
 
           <ion-item lines="none" class="answer-item">
             <ion-label position="stacked">Correct Answer</ion-label>
-            <ion-select [(ngModel)]="questions[i].answer" interface="popover">
+            <ion-select [(ngModel)]="displayQuestions[i].answer" interface="popover">
               <ion-select-option value="A">A</ion-select-option>
               <ion-select-option value="B">B</ion-select-option>
               <ion-select-option value="C">C</ion-select-option>
@@ -98,7 +114,7 @@
             </ion-select>
           </ion-item>
 
-          <div class="answer-warn" *ngIf="questions[i].answer === ''">
+          <div class="answer-warn" *ngIf="displayQuestions[i].answer === ''">
             Please select A, B, C, or D.
           </div>
         </ion-card-content>

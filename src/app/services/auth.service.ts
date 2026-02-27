@@ -11,7 +11,7 @@ import { map } from 'rxjs/operators';
 import { environment } from 'src/environments/environment';
 
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
 import { firebaseAuth, firebaseDb } from '../firebase';
 
 
@@ -256,16 +256,33 @@ export class AuthService {
 
       const token = await creds.user.getIdToken();
 
+      // Hydrate profile from Firestore so settings (name/schoolId/userType) persist across logout/login.
+      let profileName = String(creds.user.displayName || '');
+      let profileUserType: any = 'teacher';
+      let profileSchoolId: any = undefined;
+      let profileSchoolName: any = undefined;
+
+      try {
+        const db = firebaseDb();
+        const snap = await getDoc(doc(db, 'users', creds.user.uid));
+        if (snap.exists()) {
+          const data: any = snap.data();
+          if (data?.name) profileName = String(data.name);
+          if (data?.userType) profileUserType = String(data.userType);
+          if (data?.schoolId !== undefined && data?.schoolId !== null) profileSchoolId = data.schoolId;
+          if (data?.schoolName) profileSchoolName = String(data.schoolName);
+        }
+      } catch (e) {
+        console.error('AuthService.login: failed to hydrate user profile from Firestore', e);
+      }
+
       const user: User = {
-
         id: creds.user.uid,
-
         email: creds.user.email || email,
-
-        name: creds.user.displayName || '',
-
-        userType: 'teacher'
-
+        name: profileName,
+        userType: (profileUserType === 'admin' || profileUserType === 'school') ? profileUserType : 'teacher',
+        schoolId: profileSchoolId,
+        schoolName: profileSchoolName
       };
 
       await Preferences.set({ key: 'authToken', value: token });
@@ -306,24 +323,14 @@ export class AuthService {
       console.error('Logout failed:', err);
     }
 
-
-
-    // Clear local storage
-
+    // Only clear auth session keys, preserve app data like examData and settings
     await Preferences.remove({ key: 'currentUser' });
-
     await Preferences.remove({ key: 'authToken' });
 
-
-
     this.authSubject.next({
-
       isAuthenticated: false,
-
       user: null,
-
       token: null
-
     });
 
   }

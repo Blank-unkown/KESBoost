@@ -5,6 +5,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { IonicModule } from '@ionic/angular';
 import { TeacherService, ClassStudent } from '../../services/teacher.service';
+import { LocalDataService, ScannedResult } from '../../services/local-data.service';
 
 @Component({
   selector: 'app-class-students',
@@ -39,6 +40,8 @@ export class ClassStudentsPage implements OnInit {
   studentsPage = 1;
   readonly studentsPageSize = 5;
 
+  latestResultByStudentId = new Map<number, ScannedResult>();
+
   studentForm = {
     name: '',
     email: '',
@@ -57,6 +60,8 @@ export class ClassStudentsPage implements OnInit {
     this.subjectId = Number(this.route.snapshot.paramMap.get('subjectId'));
     this.subjectName = String(this.route.snapshot.queryParamMap.get('subjectName') || '');
 
+    await LocalDataService.load();
+
     await Promise.all([
       this.loadStudents(),
       this.loadClassRoster(),
@@ -64,6 +69,14 @@ export class ClassStudentsPage implements OnInit {
     ]);
 
     this.recomputeAvailableRoster();
+  }
+
+  private refreshLatestResultsMap() {
+    this.latestResultByStudentId.clear();
+    for (const s of this.students || []) {
+      const latest = LocalDataService.getLatestResultByStudent(this.classId, this.subjectId, s.id);
+      if (latest) this.latestResultByStudentId.set(s.id, latest);
+    }
   }
 
   async deleteSelectedFromClass() {
@@ -127,6 +140,30 @@ export class ClassStudentsPage implements OnInit {
 
     this.studentsPage = 1;
     this.recomputeAvailableRoster();
+    this.refreshLatestResultsMap();
+  }
+
+  getLatestScoreLabel(studentId: number): string {
+    const r = this.latestResultByStudentId.get(studentId);
+    if (!r || !Number.isFinite(Number(r.total)) || Number(r.total) <= 0) return '';
+    const pct = (Number(r.score) / Number(r.total)) * 100;
+    return `${r.score} / ${r.total} (${pct.toFixed(1)}%)`;
+  }
+
+  openLatestResult(student: ClassStudent, ev?: Event) {
+    if (ev) ev.stopPropagation();
+    const latest = this.latestResultByStudentId.get(student.id);
+    if (!latest) {
+      void this.showToast('No scan result found for this student yet.', 'warning');
+      return;
+    }
+    this.navCtrl.navigateForward('/resultviewer', {
+      queryParams: {
+        classId: this.classId,
+        subjectId: this.subjectId,
+        resultId: latest.id
+      }
+    });
   }
 
   get totalStudentPages(): number {

@@ -7,8 +7,13 @@
   </ion-toolbar>
 </ion-header>
 
-
 <ion-content class="tos-content">
+
+  <ion-fab vertical="bottom" horizontal="end" slot="fixed" *ngIf="viewMode === 'edit'">
+    <ion-fab-button color="primary" [routerLink]="['/question-generator', classId, subjectId]">
+      Q
+    </ion-fab-button>
+  </ion-fab>
 
   <ion-card class="context-card">
     <ion-card-content>
@@ -52,6 +57,9 @@
     <ion-segment-button value="answersheet">
       <ion-label>Answer Sheet</ion-label>
     </ion-segment-button>
+    <ion-segment-button value="students">
+      <ion-label>Students</ion-label>
+    </ion-segment-button>
     <ion-segment-button value="print">
       <ion-label>Print</ion-label>
     </ion-segment-button>
@@ -73,59 +81,189 @@
       Save TOS
     </ion-button>
 
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Topic</th>
-            <th>Competency</th>
-            <th>No. of Days</th>
-            <th>%</th>
-            <th>No. of Items</th>
-            <th>R</th>
-            <th>U</th>
-            <th>Ap</th>
-            <th>An</th>
-            <th>Ev</th>
-            <th>Cr</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let row of tos">
-            <td><input [(ngModel)]="row.topicName" type="text" /></td>
-            <td><input [(ngModel)]="row.learningCompetency" type="text" /></td>
-            <td><input [(ngModel)]="row.days" type="number" /></td>
-            <td><input [(ngModel)]="row.percent" type="number" /></td>
-            <td><input [(ngModel)]="row.expectedItems" type="number" /></td>
-            <td><input [(ngModel)]="row.remembering" type="number" /></td>
-            <td><input [(ngModel)]="row.understanding" type="number" /></td>
-            <td><input [(ngModel)]="row.applying" type="number" /></td>
-            <td><input [(ngModel)]="row.analyzing" type="number" /></td>
-            <td><input [(ngModel)]="row.evaluating" type="number" /></td>
-            <td><input [(ngModel)]="row.creating" type="number" /></td>
-          </tr>
-        </tbody>
-        <tfoot>
-          <tr>
-            <th colspan="2">Total</th>
-            <td>{{ getTotal('days') }}</td>
-            <td>{{ getTotal('percent') }}</td>
-            <td>{{ getTotal('expectedItems') }}</td>
-            <td>{{ getTotal('remembering') }}</td>
-            <td>{{ getTotal('understanding') }}</td>
-            <td>{{ getTotal('applying') }}</td>
-            <td>{{ getTotal('analyzing') }}</td>
-            <td>{{ getTotal('evaluating') }}</td>
-            <td>{{ getTotal('creating') }}</td>
-          </tr>
-        </tfoot>
-      </table>
+    <ion-card class="tos-nav-card" *ngIf="tos && tos.length">
+      <ion-card-content>
+        <ion-item lines="none">
+          <ion-label position="stacked">Jump to Topic</ion-label>
+          <ion-select [(ngModel)]="topicJumpIndex" (ionChange)="jumpToTopic(topicJumpIndex)" interface="popover">
+            <ion-select-option *ngFor="let row of tos; let i = index" [value]="i">
+              Topic {{ i + 1 }}<ng-container *ngIf="row.topicName"> — {{ row.topicName }}</ng-container>
+            </ion-select-option>
+          </ion-select>
+        </ion-item>
+
+        <div class="tos-nav-actions">
+          <ion-button fill="outline" size="small" (click)="expandAllTopics()">Expand All</ion-button>
+          <ion-button fill="outline" size="small" (click)="collapseAllTopics()">Collapse All</ion-button>
+        </div>
+      </ion-card-content>
+    </ion-card>
+
+    <div class="tos-editor">
+      <ion-card class="tos-topic-card" *ngFor="let row of tos; let i = index" [attr.id]="'tos-topic-' + i">
+        <ion-card-header class="tos-topic-header" (click)="toggleTopic(i)">
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+            <div style="min-width:0;">
+              <ion-card-title>Topic {{ i + 1 }}<ng-container *ngIf="row.topicName"> — {{ row.topicName }}</ng-container></ion-card-title>
+              <ion-card-subtitle>{{ isTopicExpanded(i) ? 'Tap to collapse' : 'Tap to expand' }}</ion-card-subtitle>
+            </div>
+
+            <ion-button
+              fill="clear"
+              color="danger"
+              size="small"
+              (click)="$event.stopPropagation(); deleteTopic(i)"
+            >
+              Delete
+            </ion-button>
+          </div>
+        </ion-card-header>
+        <ion-card-content *ngIf="isTopicExpanded(i)">
+          <ion-item lines="none">
+            <ion-label position="stacked">Topic Name</ion-label>
+            <ion-input [(ngModel)]="row.topicName" placeholder="e.g. Photosynthesis"></ion-input>
+          </ion-item>
+
+          <ion-item lines="none">
+            <ion-label position="stacked">Learning Competency</ion-label>
+            <ion-input [(ngModel)]="row.learningCompetency" placeholder="What students should learn"></ion-input>
+          </ion-item>
+
+          <div class="tos-meta-grid">
+            <ion-item lines="none">
+              <ion-label position="stacked">No. of Days</ion-label>
+              <ion-input [(ngModel)]="row.days" type="number" inputmode="numeric" placeholder="0"></ion-input>
+            </ion-item>
+
+            <ion-item lines="none">
+              <ion-label position="stacked">Percent (%)</ion-label>
+              <ion-input [(ngModel)]="row.percent" type="number" inputmode="numeric" placeholder="0"></ion-input>
+            </ion-item>
+
+            <ion-item lines="none">
+              <ion-label position="stacked">Planned Items</ion-label>
+              <ion-input [(ngModel)]="row.expectedItems" type="number" inputmode="numeric" placeholder="0"></ion-input>
+            </ion-item>
+          </div>
+
+          <div class="tos-bloom-title">Bloom’s Levels (Number of Items)</div>
+          <div class="tos-bloom-grid">
+            <ion-item lines="none">
+              <ion-label position="stacked">Remembering</ion-label>
+              <ion-input [(ngModel)]="row.remembering" type="number" inputmode="numeric" placeholder="0"></ion-input>
+            </ion-item>
+
+            <ion-item lines="none">
+              <ion-label position="stacked">Understanding</ion-label>
+              <ion-input [(ngModel)]="row.understanding" type="number" inputmode="numeric" placeholder="0"></ion-input>
+            </ion-item>
+
+            <ion-item lines="none">
+              <ion-label position="stacked">Applying</ion-label>
+              <ion-input [(ngModel)]="row.applying" type="number" inputmode="numeric" placeholder="0"></ion-input>
+            </ion-item>
+
+            <ion-item lines="none">
+              <ion-label position="stacked">Analyzing</ion-label>
+              <ion-input [(ngModel)]="row.analyzing" type="number" inputmode="numeric" placeholder="0"></ion-input>
+            </ion-item>
+
+            <ion-item lines="none">
+              <ion-label position="stacked">Evaluating</ion-label>
+              <ion-input [(ngModel)]="row.evaluating" type="number" inputmode="numeric" placeholder="0"></ion-input>
+            </ion-item>
+
+            <ion-item lines="none">
+              <ion-label position="stacked">Creating</ion-label>
+              <ion-input [(ngModel)]="row.creating" type="number" inputmode="numeric" placeholder="0"></ion-input>
+            </ion-item>
+          </div>
+        </ion-card-content>
+      </ion-card>
+
+      <ion-card class="tos-totals-card">
+        <ion-card-header>
+          <ion-card-title>Totals</ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <div class="tos-totals-grid">
+            <div class="tos-total"><div class="k">Days</div><div class="v">{{ getTotal('days') }}</div></div>
+            <div class="tos-total"><div class="k">Percent</div><div class="v">{{ getTotal('percent') }}</div></div>
+            <div class="tos-total"><div class="k">Planned Items</div><div class="v">{{ getTotal('expectedItems') }}</div></div>
+            <div class="tos-total"><div class="k">Bloom Items</div><div class="v">{{ totalTosItems }}</div></div>
+          </div>
+        </ion-card-content>
+      </ion-card>
     </div>
 
     <ion-button expand="block" color="primary" class="primary-action" [routerLink]="['/question-generator', classId, subjectId]">
       Generate Questions
     </ion-button>
 
+  </div>
+
+  <!-- Students Mode -->
+  <div *ngIf="viewMode === 'students'">
+    <div class="section-header">
+      <div class="section-title">Students</div>
+      <div class="section-subtitle">Tap a student to view their overall summary</div>
+    </div>
+
+    <ion-card class="tos-topic-card">
+      <ion-card-content>
+        <div class="students-loading" *ngIf="isLoadingStudents">
+          <ion-spinner name="crescent"></ion-spinner>
+        </div>
+
+        <ion-list *ngIf="!isLoadingStudents">
+          <ion-item lines="none" *ngIf="students.length === 0">
+            <ion-label>No enrolled students found.</ion-label>
+          </ion-item>
+
+          <ion-item
+            button
+            lines="none"
+            *ngFor="let s of students"
+            (click)="selectStudent(s.id)"
+          >
+            <ion-label>
+              <div style="font-weight: 900;">{{ s.name }}</div>
+              <div style="opacity: 0.85; font-size: 12px;" *ngIf="s.roll_number">Roll: {{ s.roll_number }}</div>
+              <div style="opacity: 0.85; font-size: 12px;" *ngIf="getStudentLatestLabel(s.id)">Latest: {{ getStudentLatestLabel(s.id) }}</div>
+            </ion-label>
+          </ion-item>
+        </ion-list>
+      </ion-card-content>
+    </ion-card>
+
+    <ion-card class="tos-topic-card" *ngIf="getSelectedStudent()">
+      <ion-card-header>
+        <ion-card-title>{{ getSelectedStudent()?.name }}</ion-card-title>
+        <ion-card-subtitle>Overall summary</ion-card-subtitle>
+      </ion-card-header>
+      <ion-card-content>
+        <ng-container *ngIf="getSelectedStudentSummary() as sum">
+          <div class="summary-row" style="margin-top: 0;">
+            <div class="summary-chip">
+              <div class="summary-title">Attempts</div>
+              <div class="summary-value">{{ sum.attempts }}</div>
+            </div>
+            <div class="summary-chip">
+              <div class="summary-title">Average</div>
+              <div class="summary-value">{{ sum.avgPct | number:'1.0-1' }}%</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 10px;" *ngIf="sum.latest">
+            Latest score: {{ sum.latest.score }} / {{ sum.latest.total }}
+          </div>
+
+          <ion-button expand="block" color="primary" style="margin-top: 12px;" (click)="openSelectedStudentLatestResult()" [disabled]="!sum.latest">
+            View Latest Result
+          </ion-button>
+        </ng-container>
+      </ion-card-content>
+    </ion-card>
   </div>
 
   <!-- Printable Mode -->
@@ -188,14 +326,9 @@
       [queryParams]="{ classId: classId, subjectId: subjectId }">
       Start Scanning
     </ion-button>
-    <div style="
-      height: calc(100vh - 300px);
-      overflow-y: auto;
-      overflow-x: auto;
-      padding: 10px;
-      box-sizing: border-box;
-    ">
+    <div class="answersheet-shell">
       <app-answer-sheet-generator 
+        [embedded]="true"
         [classId]="classId" 
         [subjectId]="subjectId">
       </app-answer-sheet-generator>

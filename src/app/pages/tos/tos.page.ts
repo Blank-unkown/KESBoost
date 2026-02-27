@@ -5,9 +5,9 @@ import { FormsModule } from '@angular/forms';
 import { IonicModule } from '@ionic/angular';
 import { AlertController } from '@ionic/angular';
 import { ActivatedRoute, RouterModule } from '@angular/router';
-import { LocalDataService, TopicEntry } from '../../services/local-data.service';
+import { LocalDataService, ScannedResult, TopicEntry } from '../../services/local-data.service';
 import { AnswerSheetGeneratorPage } from '../answer-sheet-generator/answer-sheet-generator.page';
-import { TeacherService } from '../../services/teacher.service';
+import { ClassStudent, TeacherService } from '../../services/teacher.service';
 
 @Component({
   selector: 'app-tos',
@@ -21,12 +21,20 @@ export class TosPage implements OnInit {
   subjectId!: number;
   className = '';
   subjectName = '';
-  viewMode: 'edit' | 'print' | 'answersheet' = 'edit';
+  viewMode: 'edit' | 'print' | 'answersheet' | 'students' = 'edit';
 
   tos: TopicEntry[] = [];
   totalItems = 0;
   isLoadingTos = false;
   isSavingTos = false;
+
+  students: ClassStudent[] = [];
+  isLoadingStudents = false;
+  selectedStudentId: number | null = null;
+  studentSummaryById = new Map<number, { attempts: number; avgPct: number; latest?: ScannedResult }>();
+
+  topicJumpIndex: number | null = null;
+  private expandedTopicIndexes = new Set<number>();
 getTotal(field: keyof TopicEntry): number {
   return this.tos.reduce((sum, topic) => sum + (Number(topic[field]) || 0), 0);
 }
@@ -34,6 +42,7 @@ getTotal(field: keyof TopicEntry): number {
   constructor(
     private route: ActivatedRoute,
     private teacherService: TeacherService,
+    private navCtrl: NavController,
     private alertController: AlertController
   ) {}
 
@@ -44,6 +53,133 @@ getTotal(field: keyof TopicEntry): number {
       buttons: ['OK'],
     });
     await alert.present();
+  }
+
+  private recomputeStudentSummaries() {
+    this.studentSummaryById.clear();
+    for (const s of this.students || []) {
+      const results = LocalDataService.getResultsByStudent(this.classId, this.subjectId, s.id);
+      const attempts = results.length;
+      const avgPct = attempts
+        ? results.reduce((sum, r) => sum + ((Number(r.total) > 0) ? (Number(r.score) / Number(r.total)) * 100 : 0), 0) / attempts
+        : 0;
+      const latest = LocalDataService.getLatestResultByStudent(this.classId, this.subjectId, s.id);
+      this.studentSummaryById.set(s.id, { attempts, avgPct, latest: latest || undefined });
+    }
+  }
+
+  async loadStudents() {
+    this.isLoadingStudents = true;
+    try {
+      this.students = await this.teacherService.getSubjectStudentsForClass(this.classId, this.subjectId);
+      this.recomputeStudentSummaries();
+      if (this.students.length && !this.selectedStudentId) {
+        this.selectedStudentId = this.students[0].id;
+      }
+    } catch (e) {
+      console.error('Failed to load students for TOS page', e);
+      this.students = [];
+      this.studentSummaryById.clear();
+    } finally {
+      this.isLoadingStudents = false;
+    }
+  }
+
+  selectStudent(studentId: number) {
+    this.selectedStudentId = studentId;
+  }
+
+  getSelectedStudent(): ClassStudent | undefined {
+    if (!this.selectedStudentId) return undefined;
+    return (this.students || []).find(s => Number(s.id) === Number(this.selectedStudentId));
+  }
+
+  getSelectedStudentSummary(): { attempts: number; avgPct: number; latest?: ScannedResult } | undefined {
+    if (!this.selectedStudentId) return undefined;
+    return this.studentSummaryById.get(this.selectedStudentId);
+  }
+
+  getStudentLatestLabel(studentId: number): string {
+    const s = this.studentSummaryById.get(studentId);
+    const r = s?.latest;
+    if (!r || !Number.isFinite(Number(r.total)) || Number(r.total) <= 0) return '';
+    const pct = (Number(r.score) / Number(r.total)) * 100;
+    return `${r.score} / ${r.total} (${pct.toFixed(1)}%)`;
+  }
+
+  openSelectedStudentLatestResult() {
+    const summary = this.getSelectedStudentSummary();
+    const latest = summary?.latest;
+    if (!latest) {
+      void this.presentAlert('No scan result found for this student yet.');
+      return;
+    }
+    this.navCtrl.navigateForward('/resultviewer', {
+      queryParams: {
+        classId: this.classId,
+        subjectId: this.subjectId,
+        resultId: latest.id
+      }
+    });
+  }
+
+  isTopicExpanded(index: number): boolean {
+    return this.expandedTopicIndexes.has(index);
+  }
+
+  toggleTopic(index: number) {
+    if (this.expandedTopicIndexes.has(index)) this.expandedTopicIndexes.delete(index);
+    else this.expandedTopicIndexes.add(index);
+  }
+
+  expandAllTopics() {
+    this.expandedTopicIndexes = new Set(this.tos.map((_, i) => i));
+  }
+
+  collapseAllTopics() {
+    this.expandedTopicIndexes.clear();
+  }
+
+  async deleteTopic(index: number) {
+    if (!Number.isFinite(index) || index < 0 || index >= (this.tos?.length || 0)) return;
+
+    const alert = await this.alertController.create({
+      header: 'Delete Topic? ',
+      message: 'This will remove the topic from the TOS. You can Save TOS to apply the change permanently.',
+      buttons: [
+        { text: 'Cancel', role: 'cancel' },
+        {
+          text: 'Delete',
+          role: 'destructive',
+          handler: () => {
+            this.tos.splice(index, 1);
+
+            // Rebuild expanded indexes based on removed item
+            const next = new Set<number>();
+            for (const i of Array.from(this.expandedTopicIndexes)) {
+              if (i === index) continue;
+              next.add(i > index ? i - 1 : i);
+            }
+            this.expandedTopicIndexes = next;
+
+            if (this.topicJumpIndex !== null && this.topicJumpIndex !== undefined) {
+              if (this.topicJumpIndex === index) this.topicJumpIndex = null;
+              else if (this.topicJumpIndex > index) this.topicJumpIndex = this.topicJumpIndex - 1;
+            }
+
+            this.recomputeTotals();
+            this.totalItems = this.totalTosItems;
+          }
+        }
+      ]
+    });
+    await alert.present();
+  }
+
+  jumpToTopic(index: number | null) {
+    if (index === null || index === undefined) return;
+    const el = document.getElementById(`tos-topic-${index}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   async ngOnInit() {
@@ -58,7 +194,12 @@ getTotal(field: keyof TopicEntry): number {
     this.subjectName = subject?.name || '';
     this.tos = subject?.tos || [];
 
+    // Default: expand first topic (if any)
+    if (this.tos.length) this.expandedTopicIndexes.add(0);
+
     await this.loadTosFromFirebase();
+
+    await this.loadStudents();
 
     this.totalItems = this.tos.reduce((sum, row) => {
       return (
@@ -104,7 +245,7 @@ getTotal(field: keyof TopicEntry): number {
     }
   }
 
-  setMode(mode: 'edit' | 'print' | 'answersheet') {
+  setMode(mode: 'edit' | 'print' | 'answersheet' | 'students') {
     this.viewMode = mode;
 
     // Automatically trigger print when entering print mode
@@ -115,7 +256,7 @@ getTotal(field: keyof TopicEntry): number {
     }
   }
 
-  onModeChange(mode: 'edit' | 'print' | 'answersheet') {
+  onModeChange(mode: 'edit' | 'print' | 'answersheet' | 'students') {
     this.setMode(mode);
   }
   addTopicRow() {
@@ -132,6 +273,11 @@ getTotal(field: keyof TopicEntry): number {
     evaluating: 0,
     creating: 0
   });
+
+  const idx = this.tos.length - 1;
+  this.expandedTopicIndexes.add(idx);
+  this.topicJumpIndex = idx;
+  setTimeout(() => this.jumpToTopic(idx), 50);
   }
 
   async saveTos() {

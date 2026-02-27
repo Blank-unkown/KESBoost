@@ -4,7 +4,7 @@
   --padding-start: 12px;
   --padding-end: 12px;
   background: linear-gradient(135deg, #f5f7fa 0%, #eef2ff 100%);
-  min-height: 100vh;
+  height: 100%;
  }
 
  .context-card {
@@ -106,14 +106,116 @@
   font-weight: 800;
  }
 
+ .answersheet-shell {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+  height: calc(100vh - 300px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+ }
+
+ .tos-editor {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+ }
+
+ .tos-topic-card {
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+ }
+
+ .tos-topic-header {
+  cursor: pointer;
+  user-select: none;
+ }
+
+ .tos-nav-card {
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+ }
+
+ .tos-nav-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+ }
+
+ .tos-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+ }
+
+ .tos-bloom-title {
+  margin-top: 12px;
+  font-weight: 900;
+  color: #111827;
+ }
+
+ .tos-bloom-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+ }
+
+ .tos-totals-card {
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+ }
+
+ .tos-totals-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+ }
+
+ .tos-total {
+  background: rgba(102, 126, 234, 0.08);
+  border-radius: 12px;
+  padding: 10px;
+ }
+
+ .tos-total .k {
+  font-size: 11px;
+  font-weight: 800;
+  color: #374151;
+ }
+
+ .tos-total .v {
+  margin-top: 2px;
+  font-size: 18px;
+  font-weight: 900;
+  color: #111827;
+ }
+
+ @media (max-width: 600px) {
+  .tos-meta-grid {
+    grid-template-columns: 1fr;
+  }
+  .tos-bloom-grid {
+    grid-template-columns: 1fr;
+  }
+ }
+
  /* General Table Styling */
  .table-scroll {
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
   width: 100%;
   background: rgba(255, 255, 255, 0.75);
   border-radius: 14px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+  -webkit-overflow-scrolling: touch;
  }
 
  table {

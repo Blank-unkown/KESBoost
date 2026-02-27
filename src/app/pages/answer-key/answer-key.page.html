@@ -7,21 +7,45 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content class="ion-padding">
+<ion-content class="answerkey-content">
+  <div class="answerkey-shell">
+    <div class="answerkey-help">
+      Tap the correct option (A–D) for each question.
+    </div>
 
-  <!-- List of answer segments -->
-  <ion-list>
-    <ion-item *ngFor="let option of answerKey; index as i; trackBy: trackByIndex">
-      <ion-label>Q{{ i + 1 }}</ion-label>
-      <ion-segment [(ngModel)]="answerKey[i]" [name]="'answer-' + i">
-        <ion-segment-button *ngFor="let opt of options" [value]="opt">
-          {{ opt }}
-        </ion-segment-button>
-      </ion-segment>
-    </ion-item>
-  </ion-list>
+    <ion-card class="answerkey-lock" *ngIf="isLockedToGenerated">
+      <ion-card-content>
+        {{ lockReason }}
+      </ion-card-content>
+    </ion-card>
 
-  <ion-button expand="block" color="success" (click)="saveAnswerKey()">
-    💾 Save Answer Key
-  </ion-button>
+    <div class="answerkey-list">
+      <ion-card class="answerkey-card" *ngFor="let option of answerKey; index as i; trackBy: trackByIndex">
+        <ion-card-content>
+          <div class="answerkey-row">
+            <div class="answerkey-q">Q{{ i + 1 }}</div>
+            <ion-segment
+              class="answerkey-seg"
+              [(ngModel)]="answerKey[i]"
+              [name]="'answer-' + i"
+              [disabled]="isLockedToGenerated"
+              scrollable="true"
+            >
+              <ion-segment-button *ngFor="let opt of options" [value]="opt">
+                <ion-label>{{ opt }}</ion-label>
+              </ion-segment-button>
+            </ion-segment>
+          </div>
+        </ion-card-content>
+      </ion-card>
+    </div>
+  </div>
 </ion-content>
+
+<ion-footer>
+  <ion-toolbar>
+    <ion-button expand="block" color="success" [disabled]="isLockedToGenerated" (click)="saveAnswerKey()">
+      Save Answer Key
+    </ion-button>
+  </ion-toolbar>
+</ion-footer>

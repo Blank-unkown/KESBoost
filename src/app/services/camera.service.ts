@@ -1,4 +1,6 @@
 import { Injectable } from '@angular/core';
+import { Camera } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
 
 @Injectable({ providedIn: 'root' })
 export class CameraService {
@@ -10,20 +12,31 @@ export class CameraService {
    * Reuses existing stream if it's still live.
    */
   async getStream(): Promise<MediaStream> {
-    // If we already have a live stream, reuse it
+    // 1. Check/Request permissions for native Android/iOS
+    if (Capacitor.isNativePlatform()) {
+      const status = await Camera.checkPermissions();
+      if (status.camera !== 'granted') {
+        const request = await Camera.requestPermissions();
+        if (request.camera !== 'granted') {
+          throw new Error('Camera permission not granted');
+        }
+      }
+    }
+
+    // 2. If we already have a live stream, reuse it
     if (this.stream && this.isStreamActive()) {
       return this.stream;
     }
 
-    // If there's already a pending request, return it
+    // 3. If there's already a pending request, return it
     if (this.streamPromise) return this.streamPromise;
 
     console.log('📷 Requesting camera access...');
     this.streamPromise = navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: 'environment' },
-        width: { ideal: 640 },
-        height: { ideal: 480 }
+        width: { ideal: 1280 }, // Higher resolution for better OMR
+        height: { ideal: 720 }
       },
       audio: false
     }).then((stream: MediaStream) => {
@@ -48,8 +61,30 @@ export class CameraService {
       throw new Error('Video element is missing!');
     }
     const stream = await this.getStream();
+
+    // Android WebView / mobile browsers often require muted + playsInline for autoplay.
+    videoEl.autoplay = true;
+    videoEl.muted = true;
+    (videoEl as any).playsInline = true;
+    videoEl.setAttribute('playsinline', 'true');
+    videoEl.setAttribute('webkit-playsinline', 'true');
+
     videoEl.srcObject = stream;
-    await videoEl.play();
+
+    // Wait for metadata so videoWidth/videoHeight are available and play is allowed.
+    await new Promise<void>((resolve) => {
+      if (videoEl.readyState >= 1) return resolve();
+      videoEl.onloadedmetadata = () => resolve();
+    });
+
+    try {
+      await videoEl.play();
+    } catch (e) {
+      // Retry once after a short delay (some devices need a moment after srcObject assignment)
+      await new Promise(res => setTimeout(res, 150));
+      await videoEl.play();
+    }
+
     console.log('🎥 Video element is now playing');
   }
 

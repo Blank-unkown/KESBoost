@@ -14,6 +14,7 @@ import type { TopicEntry } from './local-data.service';
 
 
 
+
 export interface Subject {
 
   id: number;
@@ -98,6 +99,33 @@ export class TeacherService {
     return teacherId;
   }
 
+  async loadSubjectAnswerKey(
+    classId: number,
+    subjectId: number
+  ): Promise<{ success: boolean; answerKey: string[]; error?: string }> {
+    try {
+      const teacherId = await this.getTeacherId();
+      const db = firebaseDb();
+
+      const subjectRef = doc(db, 'teachers', teacherId, 'classes', String(classId), 'subjects', String(subjectId));
+      const snap = await getDoc(subjectRef);
+      if (!snap.exists()) {
+        return { success: true, answerKey: [] };
+      }
+
+      const data: any = snap.data();
+      const arr: any[] = Array.isArray(data?.answerKey) ? data.answerKey : [];
+      const answerKey: string[] = arr.map((v) => {
+        const s = String(v || '').trim().toUpperCase();
+        return (s === 'A' || s === 'B' || s === 'C' || s === 'D') ? s : '';
+      });
+      return { success: true, answerKey };
+    } catch (err: any) {
+      console.error('Error loading answer key:', err);
+      return { success: false, answerKey: [], error: err.message || 'Failed to load answer key' };
+    }
+  }
+
   async loadSubjectQuestions(
     classId: number,
     subjectId: number
@@ -121,6 +149,37 @@ export class TeacherService {
     }
   }
 
+  async saveSubjectAnswerKey(
+    classId: number,
+    subjectId: number,
+    answerKey: string[]
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const teacherId = await this.getTeacherId();
+      const db = firebaseDb();
+
+      const subjectRef = doc(db, 'teachers', teacherId, 'classes', String(classId), 'subjects', String(subjectId));
+      const normalized: string[] = (Array.isArray(answerKey) ? answerKey : []).map((v) => {
+        const s = String(v || '').trim().toUpperCase();
+        return (s === 'A' || s === 'B' || s === 'C' || s === 'D') ? s : '';
+      });
+
+      await setDoc(
+        subjectRef,
+        {
+          answerKey: normalized,
+          answerKeyUpdatedAt: Date.now(),
+        },
+        { merge: true }
+      );
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Error saving answer key:', err);
+      return { success: false, error: err.message || 'Failed to save answer key' };
+    }
+  }
+
   async saveSubjectQuestions(
     classId: number,
     subjectId: number,
@@ -131,10 +190,18 @@ export class TeacherService {
       const db = firebaseDb();
 
       const subjectRef = doc(db, 'teachers', teacherId, 'classes', String(classId), 'subjects', String(subjectId));
+
+      const safeQuestions: any[] = Array.isArray(questions) ? questions : [];
+      const answerKey: string[] = safeQuestions.map((q: any) => {
+        const a = String(q?.answer || '').trim().toUpperCase();
+        return (a === 'A' || a === 'B' || a === 'C' || a === 'D') ? a : '';
+      });
+
       await setDoc(
         subjectRef,
         {
-          questions: Array.isArray(questions) ? questions : [],
+          questions: safeQuestions,
+          answerKey,
           questionsUpdatedAt: Date.now(),
         },
         { merge: true }

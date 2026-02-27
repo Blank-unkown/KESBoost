@@ -1,20 +1,19 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-
 import { IonicModule } from '@ionic/angular';
+import { HttpClientModule } from '@angular/common/http';
 
 import { ScanPageRoutingModule } from './scan-routing.module';
-import { RouterModule } from '@angular/router';
-import { ScanPage } from './scan.page';
+import { ScanPage } from './scan.page'; // Re-triggering linter scan
 
 @NgModule({
   imports: [
     CommonModule,
     FormsModule,
     IonicModule,
+    HttpClientModule,
     ScanPageRoutingModule,
-    RouterModule.forChild([{ path: '', component: ScanPage }]),
     ScanPage
   ]
 })

@@ -8,13 +8,14 @@ import { LocalDataService, ScannedResult } from '../../services/local-data.servi
 import { AuthService, User } from '../../services/auth.service';
 import { TeacherService, Subject } from '../../services/teacher.service';
 import Chart from 'chart.js/auto';
+import { SidebarComponent } from '../sidebar/sidebar.component';
 
 @Component({
   selector: 'app-subject-list',
   templateUrl: './subject-list.page.html',
   styleUrls: ['./subject-list.page.scss'],
   standalone: true,
-  imports: [CommonModule, FormsModule, IonicModule],
+  imports: [CommonModule, FormsModule, IonicModule, SidebarComponent],
 })
 export class SubjectListPage implements OnInit {
   classId!: number;
@@ -52,6 +53,62 @@ export class SubjectListPage implements OnInit {
     private toastController: ToastController
   ) {
     this.currentUser = this.authService.getCurrentUser();
+  }
+
+  async openSidebar() {
+    try {
+      await this.menuController.enable(true, 'main');
+      try {
+        await this.menuController.swipeGesture(true, 'main');
+        await this.menuController.get('main');
+      } catch {
+        // ignore
+      }
+
+      // Small delay helps avoid intermittent open failures on some webviews
+      await new Promise<void>((resolve) => setTimeout(() => resolve(), 0));
+      const isOpen = await this.menuController.isOpen('main');
+      if (isOpen) {
+        await this.menuController.close('main');
+        return;
+      }
+      await this.menuController.open('main');
+    } catch (err) {
+      try {
+        await this.menuController.toggle('main');
+      } catch {
+        // ignore
+      }
+      console.error('openSidebar failed:', err);
+    }
+  }
+
+  async ionViewWillEnter() {
+    try {
+      await this.menuController.enable(true, 'main');
+      try {
+        await this.menuController.swipeGesture(true, 'main');
+      } catch {
+        // ignore
+      }
+    } catch (err) {
+      console.error('Failed to enable menu for subject list:', err);
+    }
+  }
+
+  async ionViewDidEnter() {
+    // Some webviews need the view transition to complete before the menu can reliably open.
+    try {
+      await this.menuController.enable(true, 'main');
+      try {
+        await this.menuController.swipeGesture(true, 'main');
+        await this.menuController.get('main');
+      } catch {
+        // ignore
+      }
+    } catch (err) {
+      console.error('Failed to finalize menu enable for subject list:', err);
+    }
   }
 
   private async presentAlert(message: string, header = '') {

@@ -23,7 +23,17 @@ export class QuestionGeneratorPage implements OnInit {
   tos: TopicEntry[] = [];
   topicOptions: string[] = [];
   selectedTopic = '';
+  topicViewMode: 'selected' | 'all' = 'all';
   questions: {
+    topic: string;
+    competency: string;
+    level: string;
+    question: string;
+    choices: { A: string; B: string; C: string; D: string };
+    answer: 'A' | 'B' | 'C' | 'D' | '';
+  }[] = [];
+
+  displayQuestions: {
     topic: string;
     competency: string;
     level: string;
@@ -115,6 +125,7 @@ export class QuestionGeneratorPage implements OnInit {
 
     // Load cached questions (fallback) while we fetch from Firebase.
     this.questions = Array.isArray(subject?.questions) ? (subject?.questions as any[]) : [];
+    this.refreshDisplayQuestions();
 
     this.className = cls?.name || '';
     this.subjectName = subject?.name || '';
@@ -132,6 +143,7 @@ export class QuestionGeneratorPage implements OnInit {
       const qRes = await this.teacherService.loadSubjectQuestions(this.classId, this.subjectId);
       if (qRes.success && Array.isArray(qRes.questions) && qRes.questions.length) {
         this.questions = qRes.questions as any[];
+        this.refreshDisplayQuestions();
         if (subject) {
           subject.questions = this.questions;
           await LocalDataService.save();
@@ -154,6 +166,16 @@ export class QuestionGeneratorPage implements OnInit {
 
     if (!this.questions.length) {
       this.generateQuestions();
+    }
+  }
+
+  private refreshDisplayQuestions() {
+    const selected = String(this.selectedTopic || '').trim();
+    if (this.topicViewMode === 'selected' && selected) {
+      // Filter view only; do NOT mutate original questions.
+      this.displayQuestions = (this.questions || []).filter((q) => String(q?.topic || '').trim() === selected);
+    } else {
+      this.displayQuestions = this.questions || [];
     }
   }
 
@@ -254,7 +276,13 @@ export class QuestionGeneratorPage implements OnInit {
   }
 
   onTopicChange() {
-    this.generateQuestions();
+    // Only change view. Do not regenerate (would clear existing generated questions).
+    this.refreshDisplayQuestions();
+  }
+
+  onTopicViewModeChange() {
+    // Only change view. Do not regenerate (would clear existing generated questions).
+    this.refreshDisplayQuestions();
   }
 
   private hashSeed(input: string): number {
@@ -360,25 +388,137 @@ export class QuestionGeneratorPage implements OnInit {
       'creating'
     ];
 
-    const topic = String(this.selectedTopic || '').trim();
-    const tos = this.tos.filter(t => String(t.topicName || '').trim() === topic);
+    const normalizedTos = (Array.isArray(this.tos) ? this.tos : [])
+      .map((t) => ({
+        ...t,
+        topicName: String(t.topicName || '').trim(),
+        learningCompetency: String(t.learningCompetency || '').trim(),
+      }))
+      .filter((t) => !!t.topicName);
 
-    tos.forEach((entry) => {
-      cognitiveLevels.forEach((level) => {
-        const count = Number(entry[level as keyof TopicEntry] || 0);
-        for (let i = 1; i <= count; i++) {
-          const built = this.buildTemplateQuestion(entry.topicName, entry.learningCompetency, level, i);
+    const selected = String(this.selectedTopic || '').trim();
+    const activeTos = this.topicViewMode === 'selected'
+      ? normalizedTos.filter(t => t.topicName === selected)
+      : normalizedTos;
+
+    // To keep question order stable and avoid collisions in seeded generation,
+    // number items per (topic, competency, level) group.
+    const counters = new Map<string, number>();
+
+    for (const entry of activeTos) {
+      for (const level of cognitiveLevels) {
+        const count = Number((entry as any)[level] || 0);
+        if (!count) continue;
+        const key = `${entry.topicName}|||${entry.learningCompetency}|||${level}`;
+        const start = counters.get(key) ?? 0;
+        for (let j = 1; j <= count; j++) {
+          const n = start + j;
+          const built = this.buildTemplateQuestion(entry.topicName, entry.learningCompetency, level, n);
           this.questions.push({
             topic: entry.topicName,
             competency: entry.learningCompetency,
-            level: level,
+            level,
             question: built.question,
             choices: built.choices,
             answer: built.answer,
           });
         }
-      });
-    });
+        counters.set(key, start + count);
+      }
+    }
+
+    this.refreshDisplayQuestions();
+  }
+
+  async printQuestions() {
+    const list = (this.displayQuestions || []).filter((q) => String(q?.question || '').trim());
+    if (!list.length) {
+      await this.presentAlert('No generated questions to print.');
+      return;
+    }
+
+    const escapeHtml = (s: any) => String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    const rows = list.map((q, idx) => {
+      const topic = escapeHtml(q.topic);
+      const level = escapeHtml(q.level);
+      const competency = q.competency && !/^\d+$/.test(String(q.competency)) ? escapeHtml(q.competency) : '';
+      const question = escapeHtml(q.question);
+      const A = escapeHtml(q.choices?.A);
+      const B = escapeHtml(q.choices?.B);
+      const C = escapeHtml(q.choices?.C);
+      const D = escapeHtml(q.choices?.D);
+
+      return `
+        <div class="q">
+          <div class="q-meta">
+            <span class="pill">#${idx + 1}</span>
+            <span class="pill pill--soft">${topic}</span>
+            <span class="pill pill--soft">${level}</span>
+          </div>
+          ${competency ? `<div class="q-comp">${competency}</div>` : ''}
+          <div class="q-text">${question}</div>
+          <div class="choices">
+            <div><b>A.</b> ${A}</div>
+            <div><b>B.</b> ${B}</div>
+            <div><b>C.</b> ${C}</div>
+            <div><b>D.</b> ${D}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>Generated Questions</title>
+          <style>
+            @page { margin: 16mm; }
+            body { font-family: Arial, Helvetica, sans-serif; color: #111827; }
+            h1 { font-size: 18px; margin: 0 0 6px 0; }
+            .sub { color: #4b5563; margin: 0 0 14px 0; font-size: 12px; }
+            .q { break-inside: avoid; page-break-inside: avoid; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; margin: 0 0 10px 0; }
+            .q-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+            .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #4f46e5; color: #fff; font-size: 12px; font-weight: 700; }
+            .pill--soft { background: #eef2ff; color: #3730a3; }
+            .q-comp { font-size: 12px; font-weight: 700; color: #4b5563; margin-bottom: 8px; }
+            .q-text { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+            .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 13px; }
+            @media print {
+              .no-print { display: none !important; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Generated Questions</h1>
+          <div class="sub">${escapeHtml(this.className)} • ${escapeHtml(this.subjectName)}</div>
+          ${rows}
+          <script>
+            window.onload = function() {
+              window.focus();
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    const w = window.open('', '_blank');
+    if (!w) {
+      await this.presentAlert('Popup blocked. Please allow popups to print.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
   }
 
   private normalizeAnswerLetter(v: any): 'A' | 'B' | 'C' | 'D' | '' {
@@ -570,6 +710,10 @@ export class QuestionGeneratorPage implements OnInit {
       const subject = LocalDataService.getSubject(this.classId, this.subjectId);
       if (subject) {
         subject.questions = this.questions;
+        subject.answerKey = (this.questions || []).map((q) => {
+          const a = String((q as any)?.answer || '').trim().toUpperCase();
+          return (a === 'A' || a === 'B' || a === 'C' || a === 'D') ? a : '';
+        });
         await LocalDataService.save();
       }
       await this.presentAlert('Questions saved to Firebase!');
@@ -578,10 +722,23 @@ export class QuestionGeneratorPage implements OnInit {
     }
   }
 
-  async deleteQuestion(index: number) {
-    if (!Number.isFinite(index) || index < 0 || index >= this.questions.length) return;
+  async deleteQuestion(target: number | any) {
     const ok = await this.presentConfirm('Delete this question?');
     if (!ok) return;
-    this.questions = this.questions.filter((_, i) => i !== index);
+
+    if (typeof target === 'number') {
+      const index = target;
+      if (!Number.isFinite(index) || index < 0 || index >= this.questions.length) return;
+      this.questions = this.questions.filter((_, i) => i !== index);
+      this.refreshDisplayQuestions();
+      return;
+    }
+
+    const q = target;
+    const idx = this.questions.indexOf(q);
+    if (idx >= 0) {
+      this.questions = this.questions.filter((_, i) => i !== idx);
+      this.refreshDisplayQuestions();
+    }
   }
 }

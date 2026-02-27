@@ -5,13 +5,14 @@ import { FormsModule } from '@angular/forms';
 import { IonicModule } from '@ionic/angular';
 import { TeacherService, ClassData } from '../../services/teacher.service';
 import { AuthService, User } from '../../services/auth.service';
+import { SidebarComponent } from '../sidebar/sidebar.component';
 
 @Component({
   selector: 'app-class-list',
   templateUrl: './class-list.page.html',
   styleUrls: ['./class-list.page.scss'],
   standalone: true,
-  imports: [CommonModule, FormsModule, IonicModule],
+  imports: [CommonModule, FormsModule, IonicModule, SidebarComponent],
 })
 export class ClassListPage implements OnInit {
   className = '';
@@ -35,9 +36,29 @@ export class ClassListPage implements OnInit {
   async ionViewWillEnter() {
     try {
       await this.menuController.enable(false);
-      await this.menuController.enable(true, 'classListMenu');
+      await this.menuController.enable(true, 'main');
     } catch (err) {
       console.error('Failed to enable menu for class list:', err);
+    }
+  }
+
+  async openSidebar() {
+    try {
+      await this.menuController.enable(false);
+      await this.menuController.enable(true, 'main');
+      const isOpen = await this.menuController.isOpen('main');
+      if (isOpen) {
+        await this.menuController.close('main');
+        return;
+      }
+      await this.menuController.open('main');
+    } catch (err) {
+      try {
+        await this.menuController.toggle('main');
+      } catch {
+        // ignore
+      }
+      console.error('openSidebar failed:', err);
     }
   }
 

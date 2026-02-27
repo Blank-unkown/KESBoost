@@ -35,6 +35,9 @@ export interface ScannedResult {
   total: number;
   subjectId: number;
   classId: number;
+  studentId?: number | null;
+  rollNumber?: string | null;
+  studentName?: string | null;
   timestamp: string;
   answerDistribution: Record<'A'|'B'|'C'|'D', number>;
   cognitiveBreakdown: { [level: string]: { correct: number; total: number } };
@@ -252,6 +255,20 @@ static generateTOSRows(tos: TopicEntry[]): TosRow[] {
     });
 
     return breakdown;
+  }
+
+  static getResultsByStudent(classId: number, subjectId: number, studentId: number): ScannedResult[] {
+    const results = this.getResultsBySubject(classId, subjectId);
+    return (results || []).filter(r => Number((r as any)?.studentId) === Number(studentId));
+  }
+
+  static getLatestResultByStudent(classId: number, subjectId: number, studentId: number): ScannedResult | undefined {
+    const list = this.getResultsByStudent(classId, subjectId, studentId);
+    return (list || []).slice().sort((a, b) => {
+      const ta = Date.parse(String(a.timestamp || '')) || 0;
+      const tb = Date.parse(String(b.timestamp || '')) || 0;
+      return tb - ta;
+    })[0];
   }
 }
 

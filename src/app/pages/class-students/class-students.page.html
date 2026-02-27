@@ -186,7 +186,21 @@
                 <span *ngIf="s.roll_number">Roll: {{ s.roll_number }}</span>
                 <span *ngIf="s.email"> • {{ s.email }}</span>
               </p>
+              <p class="student-meta" *ngIf="getLatestScoreLabel(s.id)">
+                Latest score: {{ getLatestScoreLabel(s.id) }}
+              </p>
             </ion-label>
+
+            <ion-button
+              *ngIf="getLatestScoreLabel(s.id)"
+              slot="end"
+              fill="clear"
+              size="small"
+              color="primary"
+              (click)="openLatestResult(s, $event)"
+            >
+              View
+            </ion-button>
           </ion-item>
         </ion-list>
 

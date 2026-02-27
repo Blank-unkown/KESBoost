@@ -1,44 +1,129 @@
 <ion-header>
-  <ion-toolbar>
+  <ion-toolbar color="primary">
     <ion-buttons slot="start">
       <ion-back-button defaultHref="/teacher-dashboard"></ion-back-button>
     </ion-buttons>
-    <ion-title>SCANNER</ion-title>
+    <ion-title>OMR SCANNER</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="toggleDebug()">
+        <ion-icon [name]="debugMode ? 'bug' : 'bug-outline'"></ion-icon>
+      </ion-button>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
+
 <ion-content>
-  <div style="display: flex; flex-direction: column; align-items: center; margin-top: 16px;">
-    <ion-button *ngIf="!showCamera" (click)="onStartCameraButtonClick()">Start Camera</ion-button>
-    <ion-button *ngIf="showCamera && !showCroppedImage" color="danger" (click)="reset()">Reset</ion-button>
+  <!-- Camera View -->
+  <div *ngIf="!showResults" class="scanner-container">
+    <div class="camera-preview-wrapper">
+      <video #video autoplay muted playsinline class="camera-video"></video>
+      <canvas #canvas class="scanner-canvas"></canvas>
+      
+      <!-- Scan Overlay Guide -->
+      <div class="scan-overlay" *ngIf="!isProcessing">
+        <div class="corner tl" [class.detected]="detectedMarkers['tl']"></div>
+        <div class="corner tr" [class.detected]="detectedMarkers['tr']"></div>
+        <div class="corner bl" [class.detected]="detectedMarkers['bl']"></div>
+        <div class="corner br" [class.detected]="detectedMarkers['br']"></div>
+        
+        <!-- Auto-capture Progress Ring -->
+        <div class="progress-container" *ngIf="autoCaptureCount > 0">
+          <svg class="progress-svg" viewBox="0 0 100 100">
+            <circle class="bg" cx="50" cy="50" r="45"></circle>
+            <circle class="fg" cx="50" cy="50" r="45" 
+              [style.stroke-dashoffset]="283 - (283 * autoCaptureCount / AUTO_CAPTURE_THRESHOLD)">
+            </circle>
+          </svg>
+        </div>
+
+        <div class="guide-text">{{ statusMessage }}</div>
+      </div>
+
+      <!-- Processing Indicator -->
+      <div class="processing-overlay" *ngIf="isProcessing">
+        <ion-spinner name="crescent"></ion-spinner>
+        <p>{{ statusMessage }}</p>
+      </div>
+    </div>
+
+    <div class="controls">
+      <ion-button expand="block" (click)="takePhoto()" color="primary" class="main-capture-btn">
+        <ion-icon name="camera" slot="start"></ion-icon>
+        Snap & Grade
+      </ion-button>
+      
+      <ion-button expand="block" fill="clear" (click)="capture()" [disabled]="isProcessing" color="medium" size="small">
+        <ion-icon name="flash" slot="start"></ion-icon>
+        Try Live Scan
+      </ion-button>
+    </div>
+
+    <div class="status-bar" [class.error]="lastError" [class.success]="statusMessage === 'Ready to scan'">
+      {{ lastError || statusMessage }}
+    </div>
   </div>
 
-  <!-- Show camera preview while scanning -->
-  <div *ngIf="showCamera && !showCroppedImage" style="position: relative;">
-    <video #video autoplay playsinline></video>
-    <canvas #canvas [width]="canvasWidth" [height]="canvasHeight" style="max-width: 100%; border: 1px solid #ccc; margin-bottom: 16px;"></canvas>
+  <!-- Results View -->
+  <div *ngIf="showResults" class="results-container animate-up">
+    <!-- Header Summary Card -->
+    <div class="summary-header">
+      <div class="score-circle">
+        <svg viewBox="0 0 36 36" class="circular-chart">
+          <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+          <path class="circle" [attr.stroke-dasharray]="(score / gradingResults.length * 100) + ', 100'" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+          <text x="18" y="20.35" class="percentage">{{ score }}/{{ gradingResults.length }}</text>
+        </svg>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-item success">
+          <span class="value">{{ correctCount }}</span>
+          <span class="label">Correct</span>
+        </div>
+        <div class="stat-item danger">
+          <span class="value">{{ incorrectCount }}</span>
+          <span class="label">Wrong</span>
+        </div>
+        <div class="stat-item medium">
+          <span class="value">{{ blankCount }}</span>
+          <span class="label">Blank</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results List -->
+    <div class="results-list-wrapper">
+      <h3 class="section-title">Manual Review</h3>
+      <p class="section-subtitle">Tap an option to correct any misreads</p>
+      
+      <div class="result-card" *ngFor="let r of gradingResults; let i = index" [class.is-correct]="r.status === 'Correct'" [class.is-wrong]="r.status === 'Incorrect'">
+        <div class="q-number">Q{{ r.questionNumber }}</div>
+        
+        <div class="option-selector">
+          <div class="option-btn" *ngFor="let opt of ['A','B','C','D']" 
+               [class.selected]="r.detectedAnswer === opt"
+               [class.correct-key]="r.correctAnswer === opt"
+               (click)="correctResult(i, {detail: {value: opt}})">
+            {{ opt }}
+          </div>
+          <div class="option-btn blank-btn" [class.selected]="!r.detectedAnswer" (click)="correctResult(i, {detail: {value: null}})">
+            Ø
+          </div>
+        </div>
+
+        <div class="status-icon">
+          <ion-icon [name]="r.status === 'Correct' ? 'checkmark-circle' : 'close-circle'"></ion-icon>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-actions">
+      <ion-button expand="block" mode="ios" color="primary" class="main-btn" (click)="resetScanner()">
+        <ion-icon name="refresh" slot="start"></ion-icon>
+        SCAN NEXT SHEET
+      </ion-button>
+      <ion-button expand="block" fill="clear" color="medium" (click)="showResults = false">
+        Back to Camera
+      </ion-button>
+    </div>
   </div>
-
-  <!--
-  <div *ngIf="showCroppedImage" class="result-container">
-    <h2>Cropped Document with Overlays</h2>
-    <canvas #resultCanvas [width]="canvasWidth" [height]="canvasHeight" class="scanned-image-canvas"></canvas>
-    <p *ngIf="score !== null">Score: {{ score }}</p>
-    <ion-button color="primary" style="margin-top: 16px;" (click)="reset()">Scan Another</ion-button>
-    <ion-button *ngIf="hasResults" expand="full" color="success" (click)="goToResultViewer(latestResultId!)">
-      View Result
-    </ion-button>
-  </div>-->
-
-
-  <!-- Show cropped image and overlays after scan -->
-  <div *ngIf="showCroppedImage" style="display: flex; flex-direction: column; align-items: center; margin-top: 24px;">
-    <h2>Cropped Document with Overlays</h2>
-    <canvas #resultCanvas [width]="canvasWidth" [height]="canvasHeight" style="position: absolute; left: 0; top: 0; z-index: 2; max-width: 100%; border: 1px solid #ccc; margin-bottom: 16px;"></canvas>
-    <p *ngIf="score !== null">Score: {{ score }}</p>
-    <ion-button color="primary" style="margin-top: 16px;" (click)="reset()">Scan Another</ion-button>
-    <ion-button *ngIf="hasResults" expand="full" color="success" (click)="goToResultViewer()"> 
-      View Result
-    </ion-button>
-  </div>
-
 </ion-content>

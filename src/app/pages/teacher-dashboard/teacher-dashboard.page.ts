@@ -7,6 +7,7 @@ import { AuthService, User } from '../../services/auth.service';
 import { TeacherService, ClassData } from '../../services/teacher.service';
 import { Gesture, GestureController } from '@ionic/angular';
 import { Preferences } from '@capacitor/preferences';
+import { SidebarComponent } from '../sidebar/sidebar.component';
 
 export interface DashboardData {
   totalClasses: number;
@@ -22,7 +23,7 @@ export interface DashboardData {
   templateUrl: './teacher-dashboard.page.html',
   styleUrls: ['./teacher-dashboard.page.scss'],
   standalone: true,
-  imports: [CommonModule, FormsModule, IonicModule]
+  imports: [CommonModule, FormsModule, IonicModule, SidebarComponent]
 })
 export class TeacherDashboardPage implements OnInit, AfterViewInit, OnDestroy {
   currentUser: User | null = null;

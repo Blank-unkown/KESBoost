@@ -3,8 +3,9 @@ import { ActivatedRoute } from '@angular/router';
 import { NavController } from '@ionic/angular';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { IonicModule } from '@ionic/angular';
+import { AlertController, IonicModule } from '@ionic/angular';
 import { LocalDataService } from '../../services/local-data.service';
+import { TeacherService } from '../../services/teacher.service';
 
 @Component({
   selector: 'app-answer-key',
@@ -19,29 +20,96 @@ export class AnswerKeyPage implements OnInit {
   totalQuestions = 0;
   answerKey: string[] = [];
   options = ['A', 'B', 'C', 'D'];
+  isLockedToGenerated = false;
+  lockReason = '';
   
 
-  constructor(private route: ActivatedRoute) {}
+  constructor(
+    private route: ActivatedRoute,
+    private alertController: AlertController,
+    private teacherService: TeacherService
+  ) {}
 
-ngOnInit() {
-  this.classId = Number(this.route.snapshot.paramMap.get('classId'));
-  this.subjectId = Number(this.route.snapshot.paramMap.get('subjectId'));
-
-  const subject = LocalDataService.getSubject(this.classId, this.subjectId);
-  if (!subject) {
-    alert("Subject not found. Maybe localStorage is empty.");
-    return;
+  private async presentAlert(message: string, header = '') {
+    const alert = await this.alertController.create({
+      header,
+      message,
+      buttons: ['OK'],
+    });
+    await alert.present();
   }
 
-  const tos = subject.tos || [];
-  console.log('Loaded TOS:', tos);
+  private computeTotalQuestionsFromTos(tos: any[]): number {
+    const cognitiveLevels = [
+      'remembering',
+      'understanding',
+      'applying',
+      'analyzing',
+      'evaluating',
+      'creating',
+    ];
+    return (Array.isArray(tos) ? tos : []).reduce((sum, row) => {
+      return sum + cognitiveLevels.reduce((s, k) => s + Number((row as any)?.[k] || 0), 0);
+    }, 0);
+  }
 
-  this.totalQuestions = tos.reduce((sum, t) => sum + (t.expectedItems || 0), 0);
-  console.log('Total Questions:', this.totalQuestions);
+  private normalizeAnswerLetter(v: any): string {
+    const s = String(v || '').trim().toUpperCase();
+    return (s === 'A' || s === 'B' || s === 'C' || s === 'D') ? s : '';
+  }
 
-  this.answerKey = new Array(this.totalQuestions).fill('').map((_, i) => subject.answerKey?.[i] || '');
-  console.log('Loaded answer key:', this.answerKey);
-}
+  async ngOnInit() {
+    await LocalDataService.load();
+    this.classId = Number(this.route.snapshot.paramMap.get('classId'));
+    this.subjectId = Number(this.route.snapshot.paramMap.get('subjectId'));
+
+    const subject = LocalDataService.getSubject(this.classId, this.subjectId);
+    let tos: any[] = Array.isArray(subject?.tos) ? (subject as any).tos : [];
+    let questions: any[] = Array.isArray(subject?.questions) ? (subject as any).questions : [];
+    let legacyAnswerKey: any[] = Array.isArray(subject?.answerKey) ? (subject as any).answerKey : [];
+
+    if (!tos.length) {
+      try {
+        const tRes = await this.teacherService.loadSubjectTos(this.classId, this.subjectId);
+        if (tRes.success && Array.isArray(tRes.tos)) {
+          tos = tRes.tos;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    if (!questions.length) {
+      try {
+        const qRes = await this.teacherService.loadSubjectQuestions(this.classId, this.subjectId);
+        if (qRes.success && Array.isArray(qRes.questions)) {
+          questions = qRes.questions;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    const totalFromTos = this.computeTotalQuestionsFromTos(tos);
+    const totalFromQuestions = Array.isArray(questions) ? questions.length : 0;
+    const totalFromAnswerKey = Array.isArray(legacyAnswerKey) ? legacyAnswerKey.length : 0;
+    this.totalQuestions = totalFromTos > 0 ? totalFromTos : (totalFromQuestions > 0 ? totalFromQuestions : totalFromAnswerKey);
+
+    const fromQuestions = Array.isArray(questions)
+      ? questions.map((q: any) => this.normalizeAnswerLetter(q?.answer))
+      : [];
+    const fromLegacy = Array.isArray(legacyAnswerKey)
+      ? legacyAnswerKey.map((a: any) => this.normalizeAnswerLetter(a))
+      : [];
+
+    const base = fromQuestions.some(Boolean) ? fromQuestions : fromLegacy;
+    this.answerKey = new Array(this.totalQuestions).fill('').map((_, i) => base[i] || '');
+
+    this.isLockedToGenerated = fromQuestions.some(Boolean);
+    this.lockReason = this.isLockedToGenerated
+      ? 'Answer key is linked to the generated questions. To change answers, edit them in Question Generator, then Save there.'
+      : '';
+  }
 
 
   setAnswer(index: number, option: string) {
@@ -55,10 +123,19 @@ ngOnInit() {
 
   saveAnswerKey() {
     const subject = LocalDataService.getSubject(this.classId, this.subjectId);
+    const normalized = (this.answerKey || []).map((a) => this.normalizeAnswerLetter(a));
+
     if (subject) {
-      subject.answerKey = this.answerKey;
+      subject.answerKey = normalized;
       LocalDataService.save();
-      alert('Answer key saved!');
     }
+
+    void this.teacherService.saveSubjectAnswerKey(this.classId, this.subjectId, normalized).then(async (res) => {
+      if (!res.success) {
+        await this.presentAlert(res.error || 'Failed to save answer key');
+        return;
+      }
+      await this.presentAlert('Answer key saved!');
+    });
   }
 }

@@ -1,7 +1,23 @@
 /* Sidebar Menu */
+:host {
+  display: block;
+}
+
+.class-list-content::part(scroll) {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
+:host {
+  --classlist-surface: #ffffff;
+  --classlist-surface-2: #f9fafb;
+  --classlist-text: #111827;
+  --classlist-text-muted: rgba(17, 24, 39, 0.72);
+  --classlist-bg: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+}
+
 .sidebar-menu {
   --width: 280px;
-  --background: linear-gradient(180deg, #f5f7fa 0%, #ffffff 100%);
+  --background: linear-gradient(135deg, var(--classlist-surface) 0%, var(--classlist-surface-2) 100%);
 
   ion-header {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -34,8 +50,8 @@
   .menu-profile-section {
     padding: 24px 16px;
     text-align: center;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background: var(--classlist-surface);
+    color: var(--classlist-text);
 
     .profile-avatar {
       width: 64px;
@@ -56,6 +72,7 @@
       font-weight: 700;
       margin: 0 0 4px 0;
       letter-spacing: -0.3px;
+      color: var(--classlist-text);
     }
 
     .profile-email {
@@ -63,6 +80,7 @@
       opacity: 0.85;
       margin: 0;
       font-weight: 500;
+      color: var(--classlist-text-muted);
     }
   }
 
@@ -86,7 +104,7 @@
 
     ion-label {
       font-weight: 500;
-      color: #333;
+      color: var(--classlist-text);
       font-size: 15px;
       letter-spacing: 0.2px;
       padding-left: 12px;
@@ -168,11 +186,14 @@
 
 .class-list-content {
   --padding-top: 0;
-  --padding-bottom: 16px;
+  --padding-bottom: calc(96px + env(safe-area-inset-bottom));
   --padding-start: 0;
   --padding-end: 0;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
-  min-height: 100vh;
+  background: var(--classlist-bg);
+  /* Avoid forcing a fixed viewport height which can break IonContent scrolling on some devices */
+  min-height: 0;
+  /* Ensure content is always reachable behind gesture bars / safe areas */
+  --padding-bottom: calc(96px + env(safe-area-inset-bottom));
 
   .loading-spinner {
     display: flex;
@@ -274,11 +295,11 @@
     border: none;
     overflow: hidden;
     animation: slideDown 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    background: white;
+    background: var(--classlist-surface);
 
     ion-card-content {
       padding: 28px;
-      background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+      background: linear-gradient(135deg, var(--classlist-surface-2) 0%, var(--classlist-surface) 100%);
 
       ion-item {
         margin-bottom: 20px;
@@ -293,7 +314,7 @@
         }
 
         ion-label {
-          color: #333;
+          color: var(--classlist-text);
           font-weight: 600;
           font-size: 14px;
           letter-spacing: 0.3px;
@@ -305,7 +326,7 @@
           padding-bottom: 10px;
           transition: all 0.3s ease;
           font-size: 16px;
-          color: #333;
+          color: var(--classlist-text);
 
           &:focus {
             border-bottom-color: #667eea;
@@ -348,7 +369,7 @@
   }
 
   p {
-    color: #666;
+    color: var(--classlist-text-muted);
     font-size: 16px;
     margin: 0;
     font-weight: 500;
@@ -360,7 +381,10 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 20px;
-  padding: 0 16px 32px 16px;
+  padding: 0 16px calc(120px + env(safe-area-inset-bottom)) 16px;
+  /* Prevent any accidental horizontal scroll on small screens */
+  width: 100%;
+  box-sizing: border-box;
 
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
@@ -379,7 +403,7 @@
   overflow: hidden;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
-  background: white;
+  background: var(--classlist-surface);
   border: 2px solid rgba(102, 126, 234, 0.2);
   display: flex;
   flex-direction: column;
@@ -473,7 +497,7 @@
   .card-content {
     padding: 24px 18px;
     flex: 1;
-    background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+    background: linear-gradient(135deg, var(--classlist-surface) 0%, var(--classlist-surface-2) 100%);
 
     .info-section {
       display: flex;
@@ -529,7 +553,7 @@
         gap: 10px;
         font-size: 15px;
         font-weight: 800;
-        color: #333;
+        color: var(--classlist-text);
         margin-bottom: 14px;
         letter-spacing: 0.3px;
 
@@ -582,7 +606,7 @@
     .no-subjects {
       padding: 18px;
       text-align: center;
-      background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
+      background: linear-gradient(135deg, var(--classlist-surface-2) 0%, var(--classlist-surface) 100%);
       border-radius: 14px;
       border: 2px dashed #667eea;
 
@@ -596,7 +620,7 @@
   .card-footer {
     padding: 14px 18px 18px 18px;
     margin-top: auto;
-    background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+    background: linear-gradient(135deg, var(--classlist-surface-2) 0%, var(--classlist-surface) 100%);
 
     ion-button {
       border-radius: 14px;
@@ -724,12 +748,21 @@
 
 /* Dark Theme Support */
 @media (prefers-color-scheme: dark) {
+  :host {
+    --classlist-surface: #2d3561;
+    --classlist-surface-2: #27305a;
+    --classlist-text: rgba(255, 255, 255, 0.92);
+    --classlist-text-muted: rgba(255, 255, 255, 0.70);
+    --classlist-border: rgba(255, 255, 255, 0.10);
+    --classlist-bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  }
+
   .class-list-content {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    background: var(--classlist-bg);
   }
 
   .class-card {
-    background: #2d3561;
+    background: var(--classlist-surface);
     border-color: #3d4582;
 
     .card-content {
@@ -738,7 +771,7 @@
       }
 
       .subjects-section .section-title {
-        color: #e0e0e0;
+        color: var(--classlist-text);
       }
 
       .no-subjects {
@@ -746,17 +779,17 @@
         border-color: #4d5593;
 
         small {
-          color: #aaa;
+          color: rgba(255, 255, 255, 0.70);
         }
       }
     }
   }
 
   .add-class-form {
-    background: #2d3561;
+    background: var(--classlist-surface);
 
     ion-card-content {
-      background: linear-gradient(135deg, #2d3561 0%, #3d4582 100%);
+      background: linear-gradient(135deg, var(--classlist-surface) 0%, #3d4582 100%);
 
       ion-item {
         ion-input {
@@ -772,7 +805,7 @@
     }
 
     p {
-      color: #aaa;
+      color: var(--classlist-text-muted);
     }
   }
 }
