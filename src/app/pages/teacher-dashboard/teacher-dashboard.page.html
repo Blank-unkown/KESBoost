@@ -197,6 +197,13 @@
   <!-- Loading -->
   <div *ngIf="isLoading" class="loading-container">
     <ion-spinner name="crescent"></ion-spinner>
-    <p>Loading your dashboard...</p>
+  </div>
+
+  <!-- Brief success check when dashboard data is ready -->
+  <div class="dashboard-success-overlay" *ngIf="showWelcomeCheck">
+    <div class="check-circle">
+      <ion-icon name="checkmark-circle-outline"></ion-icon>
+    </div>
+    <p>Dashboard ready</p>
   </div>
 </ion-content>

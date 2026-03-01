@@ -1,13 +1,6 @@
-<ion-header [translucent]="true">
-  <ion-toolbar>
-    <ion-title>WELCOME!</ion-title>
-  </ion-toolbar>
-</ion-header>
-
-<ion-content [fullscreen]="true">
-  <ion-header><ion-toolbar><ion-title>Dashboard</ion-title></ion-toolbar></ion-header>
-<ion-content class="ion-padding">
-  <ion-button expand="full" (click)="goToClasses()">Manage Classes</ion-button>
-</ion-content>
-
+<ion-content [fullscreen]="true" class="ion-padding dashboard-loading">
+  <div class="loading-container">
+    <ion-spinner name="crescent"></ion-spinner>
+    <p>Loading your dashboard…</p>
+  </div>
 </ion-content>

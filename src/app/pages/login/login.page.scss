@@ -178,6 +178,57 @@
   }
 }
 
+.login-success-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.9);
+  z-index: 1000;
+  animation: loginFadeIn 0.2s ease-out;
+}
+
+.login-success-overlay .check-circle {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: #4caf50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(76, 175, 80, 0.5);
+  animation: loginScaleIn 0.25s ease-out;
+}
+
+.login-success-overlay .check-circle ion-icon {
+  font-size: 64px;
+  color: #fff;
+}
+
+.login-success-overlay p {
+  margin-top: 16px;
+  font-size: 16px;
+  color: #333;
+}
+
+@keyframes loginScaleIn {
+  from {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes loginFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @media (max-width: 480px) {
   .login-container {
     max-width: 100%;

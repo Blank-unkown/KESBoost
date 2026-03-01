@@ -84,4 +84,12 @@
       </div>
     </div>
   </div>
+
+  <!-- Full-screen success check when login completes -->
+  <div class="login-success-overlay" *ngIf="loginSuccess">
+    <div class="check-circle">
+      <ion-icon name="checkmark-circle-outline"></ion-icon>
+    </div>
+    <p>Login successful</p>
+  </div>
 </ion-content>

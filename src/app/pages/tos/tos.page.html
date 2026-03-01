@@ -239,11 +239,11 @@
     <ion-card class="tos-topic-card" *ngIf="getSelectedStudent()">
       <ion-card-header>
         <ion-card-title>{{ getSelectedStudent()?.name }}</ion-card-title>
-        <ion-card-subtitle>Overall summary</ion-card-subtitle>
+        <ion-card-subtitle *ngIf="getSelectedStudent()?.roll_number">Roll: {{ getSelectedStudent()?.roll_number }}</ion-card-subtitle>
       </ion-card-header>
       <ion-card-content>
         <ng-container *ngIf="getSelectedStudentSummary() as sum">
-          <div class="summary-row" style="margin-top: 0;">
+          <div class="student-summary-row">
             <div class="summary-chip">
               <div class="summary-title">Attempts</div>
               <div class="summary-value">{{ sum.attempts }}</div>
@@ -252,10 +252,28 @@
               <div class="summary-title">Average</div>
               <div class="summary-value">{{ sum.avgPct | number:'1.0-1' }}%</div>
             </div>
+            <div class="summary-chip" *ngIf="sum.latest">
+              <div class="summary-title">Latest</div>
+              <div class="summary-value">{{ sum.latest.score }}/{{ sum.latest.total }}</div>
+            </div>
           </div>
 
-          <div style="margin-top: 10px;" *ngIf="sum.latest">
-            Latest score: {{ sum.latest.score }} / {{ sum.latest.total }}
+          <div class="topic-strengths" *ngIf="getStrongestTopics().length">
+            <h4 class="topic-section-title">Strongest topics</h4>
+            <div class="topic-tags">
+              <span class="topic-tag strong" *ngFor="let t of getStrongestTopics()">
+                {{ t.topic }} {{ t.percent }}%
+              </span>
+            </div>
+          </div>
+
+          <div class="topic-strengths" *ngIf="getWeakestTopics().length">
+            <h4 class="topic-section-title">Needs improvement</h4>
+            <div class="topic-tags">
+              <span class="topic-tag weak" *ngFor="let t of getWeakestTopics()">
+                {{ t.topic }} {{ t.percent }}%
+              </span>
+            </div>
           </div>
 
           <ion-button expand="block" color="primary" style="margin-top: 12px;" (click)="openSelectedStudentLatestResult()" [disabled]="!sum.latest">

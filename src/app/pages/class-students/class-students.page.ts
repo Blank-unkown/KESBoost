@@ -74,7 +74,7 @@ export class ClassStudentsPage implements OnInit {
   private refreshLatestResultsMap() {
     this.latestResultByStudentId.clear();
     for (const s of this.students || []) {
-      const latest = LocalDataService.getLatestResultByStudent(this.classId, this.subjectId, s.id);
+      const latest = LocalDataService.getLatestResultByStudent(this.classId, this.subjectId, s.id, s.roll_number);
       if (latest) this.latestResultByStudentId.set(s.id, latest);
     }
   }

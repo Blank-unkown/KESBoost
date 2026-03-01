@@ -29,6 +29,7 @@ export class TeacherDashboardPage implements OnInit, AfterViewInit, OnDestroy {
   currentUser: User | null = null;
   dashboardData: DashboardData | null = null;
   isLoading = false;
+  showWelcomeCheck = false;
   classes: ClassData[] = [];
   private gestures: Gesture[] = [];
   private suppressNextClassClick = false;
@@ -86,6 +87,10 @@ export class TeacherDashboardPage implements OnInit, AfterViewInit, OnDestroy {
     try {
       this.classes = await this.teacherService.getClasses();
       this.calculateDashboardData();
+      this.showWelcomeCheck = true;
+      setTimeout(() => {
+        this.showWelcomeCheck = false;
+      }, 700);
     } catch (err) {
       console.error('Error loading dashboard:', err);
       await this.showToast('Failed to load dashboard data', 'danger');

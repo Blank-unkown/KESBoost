@@ -21,6 +21,15 @@
       
       <!-- Scan Overlay Guide -->
       <div class="scan-overlay" *ngIf="!isProcessing">
+        <!-- Sheet + bubble alignment guide -->
+        <div class="sheet-guide">
+          <div class="sheet-frame">
+            <div class="header-box"></div>
+            <div class="bubble-column left"></div>
+            <div class="bubble-column right"></div>
+          </div>
+        </div>
+
         <div class="corner tl" [class.detected]="detectedMarkers['tl']"></div>
         <div class="corner tr" [class.detected]="detectedMarkers['tr']"></div>
         <div class="corner bl" [class.detected]="detectedMarkers['bl']"></div>
@@ -110,10 +119,65 @@
           </div>
         </div>
 
+        <div *ngIf="debugMode" class="debug-mini">
+          conf: {{ (r.confidence || 0) * 100 | number:'1.0-0' }}%
+          <ng-container *ngIf="r.status === 'Invalid' && !r.correctAnswer">
+            • no key
+          </ng-container>
+        </div>
+
         <div class="status-icon">
           <ion-icon [name]="r.status === 'Correct' ? 'checkmark-circle' : 'close-circle'"></ion-icon>
         </div>
       </div>
+    </div>
+
+    <!-- Save to Profile -->
+    <div class="save-to-profile-section">
+      <h3 class="section-title">Save to Student Profile</h3>
+      <p class="section-subtitle">Enter roll number from the sheet to link this result to a student</p>
+
+      <ion-item lines="none" class="save-field">
+        <ion-label position="stacked">Roll Number</ion-label>
+        <ion-input
+          [(ngModel)]="rollNumberInput"
+          (ionInput)="onRollNumberChange()"
+          placeholder="e.g. 22-2424"
+          [disabled]="isSaving"
+        ></ion-input>
+      </ion-item>
+
+      <ion-item lines="none" class="save-field" *ngIf="students.length > 0">
+        <ion-label position="stacked">Or pick student</ion-label>
+        <ion-select
+          [(ngModel)]="selectedStudentId"
+          (ionChange)="onStudentSelected($event)"
+          interface="popover"
+          placeholder="Select student"
+          [disabled]="isSaving"
+        >
+          <ion-select-option *ngFor="let s of students" [value]="s.id">
+            {{ s.name }}<ng-container *ngIf="s.roll_number"> ({{ s.roll_number }})</ng-container>
+          </ion-select-option>
+        </ion-select>
+      </ion-item>
+
+      <div class="matched-hint" *ngIf="rollNumberInput && matchedStudent">
+        <ion-icon name="checkmark-circle" color="success"></ion-icon>
+        Matched: {{ matchedStudent.name }}
+      </div>
+
+      <ion-button
+        expand="block"
+        color="success"
+        class="save-btn"
+        (click)="saveToProfile()"
+        [disabled]="isSaving || saveSuccess || (!rollNumberInput && !selectedStudentId)"
+      >
+        <ion-spinner *ngIf="isSaving" name="crescent" slot="start"></ion-spinner>
+        <ion-icon *ngIf="!isSaving" name="person-add" slot="start"></ion-icon>
+        {{ saveSuccess ? 'Saved!' : 'Save to Profile' }}
+      </ion-button>
     </div>
 
     <div class="footer-actions">

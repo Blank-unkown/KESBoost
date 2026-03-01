@@ -75,15 +75,20 @@ export interface Class {
 
 export class LocalDataService {
   private static classes: Class[] = [];
+  private static isLoaded = false;
 
   // Load from storage into memory
   static async load(): Promise<void> {
+    if (this.isLoaded) {
+      return;
+    }
     const stored = await Preferences.get({ key: 'examData' });
     if (stored.value) {
       this.classes = JSON.parse(stored.value);
     } else {
       this.classes = [];
     }
+    this.isLoaded = true;
   }
 
   static async save(): Promise<void> {
@@ -210,7 +215,12 @@ static generateTOSRows(tos: TopicEntry[]): TosRow[] {
     if (!subject) return;
     subject.results = subject.results || [];
     subject.results.push(result);
-    this.save(); // still async-compatible
+  }
+
+  static setSubjectResults(classId: number, subjectId: number, results: ScannedResult[]) {
+    const subject = this.getSubject(classId, subjectId);
+    if (!subject) return;
+    subject.results = results.slice();
   }
 
   
@@ -257,13 +267,58 @@ static generateTOSRows(tos: TopicEntry[]): TosRow[] {
     return breakdown;
   }
 
-  static getResultsByStudent(classId: number, subjectId: number, studentId: number): ScannedResult[] {
+  static getResultsByStudent(classId: number, subjectId: number, studentId: number, studentRollNumber?: string | null): ScannedResult[] {
     const results = this.getResultsBySubject(classId, subjectId);
-    return (results || []).filter(r => Number((r as any)?.studentId) === Number(studentId));
+    const sid = Number(studentId);
+    const roll = String(studentRollNumber || '').trim();
+    return (results || []).filter(r => {
+      if (Number((r as any)?.studentId) === sid) return true;
+      if (roll && String((r as any)?.rollNumber || '').trim() === roll) return true;
+      return false;
+    });
   }
 
-  static getLatestResultByStudent(classId: number, subjectId: number, studentId: number): ScannedResult | undefined {
-    const list = this.getResultsByStudent(classId, subjectId, studentId);
+  /** Per-topic breakdown for a student in this subject (correct, total, percent). */
+  static getStudentTopicBreakdown(classId: number, subjectId: number, studentId: number, studentRollNumber?: string | null): { topic: string; competency: string; level: string; correct: number; total: number; percent: number }[] {
+    const results = this.getResultsByStudent(classId, subjectId, studentId, studentRollNumber);
+    const subject = this.getSubject(classId, subjectId);
+    const tosRows = subject?.tosRows?.length ? subject.tosRows : this.generateTOSRows(subject?.tos || []);
+    if (!tosRows.length) return [];
+
+    const byRow: { [key: string]: { correct: number; total: number } } = {};
+    for (const row of tosRows) {
+      const key = `${row.topic}|${row.competency}|${row.level}`;
+      byRow[key] = { correct: 0, total: 0 };
+    }
+
+    for (const r of results) {
+      for (const a of r.answers || []) {
+        const row = tosRows.find((tr: any) => a.question >= tr.startQuestion && a.question <= tr.endQuestion);
+        if (!row) continue;
+        const key = `${row.topic}|${row.competency}|${row.level}`;
+        const rec = byRow[key];
+        if (!rec) continue;
+        rec.total++;
+        if (a.correct) rec.correct++;
+      }
+    }
+
+    return tosRows.map((row: any) => {
+      const key = `${row.topic}|${row.competency}|${row.level}`;
+      const rec = byRow[key] || { correct: 0, total: 0 };
+      return {
+        topic: row.topic,
+        competency: row.competency,
+        level: row.level,
+        correct: rec.correct,
+        total: rec.total,
+        percent: rec.total > 0 ? Math.round((rec.correct / rec.total) * 100) : 0
+      };
+    }).filter(x => x.total > 0);
+  }
+
+  static getLatestResultByStudent(classId: number, subjectId: number, studentId: number, studentRollNumber?: string | null): ScannedResult | undefined {
+    const list = this.getResultsByStudent(classId, subjectId, studentId, studentRollNumber);
     return (list || []).slice().sort((a, b) => {
       const ta = Date.parse(String(a.timestamp || '')) || 0;
       const tb = Date.parse(String(b.timestamp || '')) || 0;

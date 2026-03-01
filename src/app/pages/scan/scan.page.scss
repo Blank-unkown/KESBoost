@@ -44,6 +44,53 @@
   justify-content: center;
   z-index: 10;
 
+  .sheet-guide {
+    position: absolute;
+    inset: 6% 10% 16%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .sheet-frame {
+      position: relative;
+      width: 70%;
+      max-height: 100%;
+      aspect-ratio: 800 / 1131;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      border-radius: 8px;
+      box-shadow: 0 0 18px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+
+      .header-box {
+        position: absolute;
+        top: 6%;
+        left: 7%;
+        right: 7%;
+        height: 14%;
+        border: 1px dashed rgba(255, 255, 255, 0.5);
+        border-radius: 4px;
+      }
+
+      .bubble-column {
+        position: absolute;
+        top: 26%;
+        bottom: 10%;
+        width: 18%;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        background: radial-gradient(circle at 50% 10%, rgba(255,255,255,0.25), transparent 60%);
+
+        &.left {
+          left: 16%;
+        }
+
+        &.right {
+          right: 16%;
+        }
+      }
+    }
+  }
+
   .corner {
     position: absolute;
     width: 40px;
@@ -343,6 +390,40 @@
       &[name="checkmark-circle"] { color: #4cd964; }
       &[name="close-circle"] { color: #ff4961; }
     }
+  }
+
+  .debug-mini {
+    font-size: 11px;
+    color: #888;
+    margin-left: 10px;
+    white-space: nowrap;
+  }
+}
+
+.save-to-profile-section {
+  margin: 20px 16px;
+  padding: 20px;
+  background: white;
+  border-radius: 18px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+
+  .save-field {
+    --padding-start: 0;
+    --inner-padding-end: 0;
+    margin-bottom: 12px;
+  }
+
+  .matched-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--ion-color-success);
+    margin-bottom: 12px;
+  }
+
+  .save-btn {
+    margin-top: 8px;
   }
 }
 

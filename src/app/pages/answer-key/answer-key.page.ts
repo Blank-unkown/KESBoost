@@ -66,28 +66,18 @@ export class AnswerKeyPage implements OnInit {
     const subject = LocalDataService.getSubject(this.classId, this.subjectId);
     let tos: any[] = Array.isArray(subject?.tos) ? (subject as any).tos : [];
     let questions: any[] = Array.isArray(subject?.questions) ? (subject as any).questions : [];
-    let legacyAnswerKey: any[] = Array.isArray(subject?.answerKey) ? (subject as any).answerKey : [];
+    const legacyAnswerKey: any[] = Array.isArray(subject?.answerKey) ? (subject as any).answerKey : [];
 
-    if (!tos.length) {
-      try {
-        const tRes = await this.teacherService.loadSubjectTos(this.classId, this.subjectId);
-        if (tRes.success && Array.isArray(tRes.tos)) {
-          tos = tRes.tos;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    if (!questions.length) {
-      try {
-        const qRes = await this.teacherService.loadSubjectQuestions(this.classId, this.subjectId);
-        if (qRes.success && Array.isArray(qRes.questions)) {
-          questions = qRes.questions;
-        }
-      } catch (e) {
-        console.error(e);
-      }
+    // Load TOS and questions in parallel when both are needed.
+    const needTos = !tos.length;
+    const needQuestions = !questions.length;
+    if (needTos || needQuestions) {
+      const [tRes, qRes] = await Promise.all([
+        needTos ? this.teacherService.loadSubjectTos(this.classId, this.subjectId) : Promise.resolve({ success: true, tos: [] }),
+        needQuestions ? this.teacherService.loadSubjectQuestions(this.classId, this.subjectId) : Promise.resolve({ success: true, questions: [] })
+      ]);
+      if (needTos && tRes.success && Array.isArray(tRes.tos)) tos = tRes.tos;
+      if (needQuestions && qRes.success && Array.isArray(qRes.questions)) questions = qRes.questions;
     }
 
     const totalFromTos = this.computeTotalQuestionsFromTos(tos);

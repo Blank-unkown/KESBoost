@@ -29,7 +29,7 @@ export class OmrLiteService {
   /**
    * Main entry point: process a canvas frame and return results.
    */
-  processFrame(canvas: HTMLCanvasElement, answerKey: string[]): any {
+  processFrame(canvas: HTMLCanvasElement, answerKey: string[]): { gradingResults: any[]; studentHash?: number | null } {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) throw new Error('Could not get canvas context');
 
@@ -38,20 +38,17 @@ export class OmrLiteService {
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
 
-    // 1. GLOBAL SEARCH for markers (Find markers ANYWHERE in the image)
-    const allMarkers = this.findAllMarkersGlobal(data, width, height);
-    
-    // 2. Filter and find the best 4 markers forming a sheet rectangle
+    // 1. Prefer quadrant marker detection (reduces false positives from filled bubbles)
     let markersToUse: Point[] = [];
-    const bestRect = this.findBestSheetRectangle(allMarkers);
-    
-    if (bestRect && bestRect.length === 4) {
-      markersToUse = bestRect;
+    const quadMarkers = this.detectMarkers(data, width, height);
+    if (quadMarkers.length === 4) {
+      markersToUse = quadMarkers.map(m => m.center);
     } else {
-      // Fallback: Try the legacy quadrant detection if global search fails
-      const legacyMarkers = this.detectMarkers(data, width, height);
-      if (legacyMarkers.length === 4) {
-        markersToUse = legacyMarkers.map(m => m.center);
+      // 2. Fallback: GLOBAL SEARCH for markers (Find markers ANYWHERE in the image)
+      const allMarkers = this.findAllMarkersGlobal(data, width, height);
+      const bestRect = this.findBestSheetRectangle(allMarkers);
+      if (bestRect && bestRect.length === 4) {
+        markersToUse = bestRect;
       } else {
         throw new Error(`Sheet not fully visible. Ensure all 4 corner markers are in the photo.`);
       }
@@ -61,35 +58,47 @@ export class OmrLiteService {
     const sortedMarkers = this.sortCorners(markersToUse);
     const transform = this.getPerspectiveTransform(this.TEMPLATE_MARKERS, sortedMarkers);
 
-    // 4. Sample Paper White (LOCAL COMPENSATION)
-    // We sample white space near the middle of the sheet to get a baseline for lighting
-    const paperWhite = this.getPaperWhite(data, width, height, sortedMarkers);
+    // 4. Decode student identity code (if present)
+    const studentHash = this.decodeStudentCode(data, width, height, transform);
 
-    // 5. Sample Bubbles
+    // 5. Sample Bubbles (local background normalization per bubble)
     const results = [];
-    const questionsToProcess = 50; 
+    const normalizedKey = Array.isArray(answerKey) ? answerKey : [];
+    const requestedCount = normalizedKey.length;
+    const questionsToProcess = Math.max(
+      1,
+      Math.min(
+        bubbles.length,
+        requestedCount > 0 ? requestedCount : 50
+      )
+    );
     
     for (let q = 0; q < questionsToProcess; q++) {
       const template = bubbles[q];
-      const fills: { option: Option, percent: number }[] = [];
-
-      // ACCURACY BOOST: Sample local white level for each column to handle shadows
-      const colX = q < 25 ? sortedMarkers[0].x + (sortedMarkers[1].x - sortedMarkers[0].x) * 0.25 : sortedMarkers[0].x + (sortedMarkers[1].x - sortedMarkers[0].x) * 0.75;
-      const localWhite = this.getPaperWhite(data, width, height, sortedMarkers); // Use global for now, but localized
+      const fills: { option: Option, score: number }[] = [];
 
       (['A', 'B', 'C', 'D'] as Option[]).forEach(opt => {
         const coord = template.options[opt];
         const imgPt = this.applyTransform(transform, coord.cx, coord.cy);
         
-        // ACCURACY BOOST: Use a smaller radius (radius - 4) to stay strictly INSIDE the circle border.
-        // This prevents the black border of an empty circle from being counted as shading.
-        const sampleRadius = coord.radius - 4;
-        const fillPercent = this.getFillPercentage(data, width, height, imgPt, sampleRadius, paperWhite);
-        fills.push({ option: opt, percent: fillPercent });
+        // Sample only the center area to avoid counting the printed circle border.
+        const innerRadius = Math.max(3, coord.radius * 0.55);
+        const ringInner = Math.max(innerRadius + 2, coord.radius * 0.95);
+        const ringOuter = Math.max(ringInner + 2, coord.radius * 1.45);
+
+        const innerMean = this.getMeanBrightnessInDisk(data, width, height, imgPt, innerRadius);
+        const ringMean = this.getMeanBrightnessInRing(data, width, height, imgPt, ringInner, ringOuter);
+
+        // Score is normalized darkness relative to local background.
+        // 0 => same brightness as background (blank), 1 => very dark (filled).
+        const bg = Number.isFinite(ringMean) && ringMean > 0 ? ringMean : innerMean;
+        const score = bg > 0 ? this.clamp01((bg - innerMean) / bg) : 0;
+
+        fills.push({ option: opt, score });
       });
 
       // Grade
-      const sortedFills = [...fills].sort((a, b) => b.percent - a.percent);
+      const sortedFills = [...fills].sort((a, b) => b.score - a.score);
       const top = sortedFills[0];
       const second = sortedFills[1];
 
@@ -97,47 +106,87 @@ export class OmrLiteService {
       let detectedAnswer: string | null = null;
 
       /**
-       * PENCIL OPTIMIZATION (No-Letters + Border-Ignore Edition):
-       * Since we are only sampling the INSIDE of the circle, a blank bubble will be ~0%.
-       * A shaded bubble will be very high (>40%).
+       * Robust scoring notes:
+       * - Uses local background ring per bubble to handle shadows / uneven lighting.
+       * - Uses center-only sampling to avoid circle border false positives.
        */
-      const DEFINITE_THRESHOLD = 0.40; // Any bubble more than 40% full is definitely an answer
-      const MIN_THRESHOLD = 0.20; // Lower than this is noise or paper texture
+      const BLANK_THRESHOLD = 0.10;
+      const DEFINITE_THRESHOLD = 0.20;
+      const MIN_GAP = 0.055;
 
-      if (top.percent < MIN_THRESHOLD) {
+      if (top.score < BLANK_THRESHOLD) {
         status = 'Blank';
-      } else if (top.percent >= DEFINITE_THRESHOLD) {
-        // Very strong mark, check if it's unique
-        if (second.percent > DEFINITE_THRESHOLD || (top.percent - second.percent < 0.20)) {
-          status = 'Invalid'; // Double marked
-        } else {
-          detectedAnswer = top.option;
-          // Use answerKey[q] or fallback to 'A' if not provided
-          const correctAns = answerKey[q] || 'A';
-          status = detectedAnswer === correctAns ? 'Correct' : 'Incorrect';
-        }
+      } else if ((top.score - second.score) < MIN_GAP) {
+        status = 'Invalid'; // ambiguous / double-marked
       } else {
-        // Potential pencil mark (20% - 60%)
-        // Must be significantly darker than the second best option to be valid
-        if (top.percent - second.percent > 0.15) {
-          detectedAnswer = top.option;
-          const correctAns = answerKey[q] || 'A';
-          status = detectedAnswer === correctAns ? 'Correct' : 'Incorrect';
+        detectedAnswer = top.option;
+        const correctAns = this.normalizeAnswerLetter(normalizedKey[q]);
+        if (!correctAns) {
+          status = 'Invalid'; // cannot grade without a valid key entry
         } else {
-          status = 'Invalid'; // Too close to call / ambiguous
+          status = detectedAnswer === correctAns ? 'Correct' : 'Incorrect';
         }
       }
 
       results.push({
         questionNumber: q + 1,
         detectedAnswer,
-        correctAnswer: answerKey[q] || 'A',
+        correctAnswer: this.normalizeAnswerLetter(normalizedKey[q]),
         status,
-        confidence: top.percent
+        confidence: top.score
       });
     }
 
-    return results;
+    return { gradingResults: results, studentHash };
+  }
+
+  /**
+   * Decode the small 8x8 student identity grid drawn in the header.
+   * Returns the lower 16-bit student hash (studentId & 0xffff) or null.
+   */
+  private decodeStudentCode(
+    data: Uint8ClampedArray,
+    width: number,
+    height: number,
+    h: number[]
+  ): number | null {
+    // Grid definition must match answer-sheet-generator.page.html
+    // Placed in the blank area between CLASS/DATE and the roll number box
+    const originX = 320;
+    const originY = 150;
+    const cell = 6;
+    const size = 8;
+
+    const bits: number[] = [];
+
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        // Skip outer border row/col 0 (finder)
+        if (r === 0 || c === 0) continue;
+
+        const u = originX + c * cell + cell / 2;
+        const v = originY + r * cell + cell / 2;
+        const pt = this.applyTransform(h, u, v);
+        const brightness = this.getMeanBrightnessInDisk(data, width, height, pt, cell * 0.4);
+        const bit = brightness < 150 ? 1 : 0;
+        bits.push(bit);
+      }
+    }
+
+    if (bits.length < 48) return null;
+
+    const read16 = (offset: number): number => {
+      let val = 0;
+      for (let i = 0; i < 16; i++) {
+        val = (val << 1) | (bits[offset + i] ? 1 : 0);
+      }
+      return val & 0xffff;
+    };
+
+    // const classPart = read16(0);
+    // const subjectPart = read16(16);
+    const studentPart = read16(32);
+    return studentPart;
   }
 
   /**
@@ -153,7 +202,12 @@ export class OmrLiteService {
         if (data[idx] < 110) { // Potential marker dark pixel
           // Check if this point matches the nested marker pattern
           // We use a small local quadrant around this point
-          const localQuad = { x1: x-20, y1: y-20, x2: x+20, y2: y+20 };
+          const localQuad = {
+            x1: Math.max(0, x - 20),
+            y1: Math.max(0, y - 20),
+            x2: Math.min(width, x + 20),
+            y2: Math.min(height, y + 20)
+          };
           const marker = this.findNestedMarker(data, width, height, localQuad);
           if (marker) {
             // Avoid duplicate markers near each other
@@ -235,13 +289,18 @@ export class OmrLiteService {
    */
   public findNestedMarker(data: Uint8ClampedArray, width: number, height: number, quad: any): Marker | null {
     let sumX = 0, sumY = 0, count = 0;
-    let minX = quad.x2, maxX = quad.x1, minY = quad.y2, maxY = quad.y1;
+    const x1 = Math.max(0, Math.floor(Number(quad?.x1 ?? 0)));
+    const y1 = Math.max(0, Math.floor(Number(quad?.y1 ?? 0)));
+    const x2 = Math.min(width, Math.ceil(Number(quad?.x2 ?? width)));
+    const y2 = Math.min(height, Math.ceil(Number(quad?.y2 ?? height)));
+
+    let minX = x2, maxX = x1, minY = y2, maxY = y1;
 
     // 1. First pass: find all dark pixels in the quadrant
     // Use a slightly larger stride for real-time tracking performance
     const stride = 3; // Reduced stride for better detection at distances
-    for (let y = quad.y1; y < quad.y2; y += stride) {
-      for (let x = quad.x1; x < quad.x2; x += stride) {
+    for (let y = y1; y < y2; y += stride) {
+      for (let x = x1; x < x2; x += stride) {
         const idx = (Math.round(y) * width + Math.round(x)) * 4;
         // More lenient black threshold for markers (up to 120 instead of 80)
         if (data[idx] < 120 && data[idx + 1] < 120 && data[idx + 2] < 120) {
@@ -258,6 +317,12 @@ export class OmrLiteService {
     const centerY = (minY + maxY) / 2;
     const w = maxX - minX;
     const h = maxY - minY;
+
+    // Basic geometry sanity checks (prevents filled bubbles from being treated as markers)
+    const aspect = h > 0 ? (w / h) : 0;
+    if (aspect < 0.7 || aspect > 1.35) return null;
+    const size = Math.min(w, h);
+    if (size < 10) return null;
 
     // 2. Second pass: Validate the "Nested" pattern at the center
     // Check center
@@ -279,8 +344,24 @@ export class OmrLiteService {
       }
     }
 
-    // If at least 2 points match the "white ring" pattern, we accept it
-    if (!isInnerBlack || whitePoints < 2) return null;
+    // Additionally validate outer black border further away from the center.
+    // This helps reject filled bubbles (which don't have an outer black square beyond the circle).
+    const outerOffsets = [
+      {dx: 0.65, dy: 0}, {dx: -0.65, dy: 0}, {dx: 0, dy: 0.65}, {dx: 0, dy: -0.65}
+    ];
+    let outerBlackPoints = 0;
+    for (const offset of outerOffsets) {
+      const rx = Math.round(centerX + w * offset.dx);
+      const ry = Math.round(centerY + h * offset.dy);
+      if (rx >= 0 && rx < width && ry >= 0 && ry < height) {
+        const ridx = (ry * width + rx) * 4;
+        const b = (data[ridx] + data[ridx + 1] + data[ridx + 2]) / 3;
+        if (b < 120) outerBlackPoints++;
+      }
+    }
+
+    // If at least 2 points match the "white ring" AND at least 2 match outer black, accept it.
+    if (!isInnerBlack || whitePoints < 2 || outerBlackPoints < 2) return null;
 
     return {
       center: { x: centerX, y: centerY },
@@ -374,31 +455,82 @@ export class OmrLiteService {
   }
 
   /**
-   * Calculate fill darkness relative to the paper white level.
+   * Calculate mean brightness (0..255) inside a disk.
    */
-  private getFillPercentage(data: Uint8ClampedArray, width: number, height: number, pt: Point, radius: number, paperWhite: number): number {
-    let darkCount = 0, totalCount = 0;
+  private getMeanBrightnessInDisk(
+    data: Uint8ClampedArray,
+    width: number,
+    height: number,
+    pt: Point,
+    radius: number
+  ): number {
+    let total = 0;
+    let count = 0;
     const rSq = radius * radius;
     const rInt = Math.ceil(radius);
-
-    // Adaptive threshold: a pixel is "filled" if it's significantly darker than the paper white
-    const darkThreshold = paperWhite * 0.80; // 20% darker than paper (optimized for pencil)
 
     for (let dy = -rInt; dy <= rInt; dy++) {
       for (let dx = -rInt; dx <= rInt; dx++) {
         if (dx * dx + dy * dy > rSq) continue;
-        
+
         const x = Math.round(pt.x + dx);
         const y = Math.round(pt.y + dy);
         if (x < 0 || x >= width || y < 0 || y >= height) continue;
 
         const idx = (y * width + x) * 4;
-        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-        
-        if (brightness < darkThreshold) darkCount++;
-        totalCount++;
+        total += (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        count++;
       }
     }
-    return totalCount === 0 ? 0 : darkCount / totalCount;
+
+    return count > 0 ? total / count : 255;
+  }
+
+  /**
+   * Calculate mean brightness (0..255) in an annulus (ring) around the bubble.
+   * This is used as the local background reference, robust against shadows.
+   */
+  private getMeanBrightnessInRing(
+    data: Uint8ClampedArray,
+    width: number,
+    height: number,
+    pt: Point,
+    innerRadius: number,
+    outerRadius: number
+  ): number {
+    let total = 0;
+    let count = 0;
+    const rInSq = innerRadius * innerRadius;
+    const rOutSq = outerRadius * outerRadius;
+    const rInt = Math.ceil(outerRadius);
+
+    for (let dy = -rInt; dy <= rInt; dy++) {
+      for (let dx = -rInt; dx <= rInt; dx++) {
+        const dSq = dx * dx + dy * dy;
+        if (dSq < rInSq || dSq > rOutSq) continue;
+
+        const x = Math.round(pt.x + dx);
+        const y = Math.round(pt.y + dy);
+        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+
+        const idx = (y * width + x) * 4;
+        total += (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        count++;
+      }
+    }
+
+    return count > 0 ? total / count : NaN;
+  }
+
+  private normalizeAnswerLetter(v: any): string {
+    const s = String(v || '').trim().toUpperCase();
+    return (s === 'A' || s === 'B' || s === 'C' || s === 'D') ? s : '';
+  }
+
+  private clamp01(n: number): number {
+    if (!Number.isFinite(n)) return 0;
+    if (n < 0) return 0;
+    if (n > 1) return 1;
+    return n;
   }
 }

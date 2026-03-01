@@ -124,6 +124,23 @@
         <rect x="745" y="1076" width="25" height="25" fill="black" />
       </g>
 
+      <!-- Student Identity Code (8x8 grid) -->
+      <g id="student-code" *ngIf="currentStudentName || currentStudentRollNumber">
+        <ng-container *ngFor="let row of studentCodeGrid; let r = index">
+          <ng-container *ngFor="let bit of row; let c = index">
+            <rect
+              [attr.x]="320 + c * 6"
+              [attr.y]="150 + r * 6"
+              [attr.width]="6"
+              [attr.height]="6"
+              [attr.fill]="bit ? 'black' : 'white'"
+              stroke="black"
+              stroke-width="0.4"
+            />
+          </ng-container>
+        </ng-container>
+      </g>
+
       <!-- BUBBLES (No letters inside for better OMR detection) -->
       <ng-container *ngFor="let b of exportBubbles">
         <!-- Question Number -->

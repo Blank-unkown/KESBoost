@@ -212,14 +212,11 @@ export class SubjectListPage implements OnInit {
     this.navCtrl.navigateForward(`/tos/${this.classId}/${subjectId}`);
   }
 
-  goToScannedResults(subjectId: number) {
-    this.subjectId = subjectId;
-    this.results = LocalDataService.getResultsBySubject(this.classId, subjectId);
-
-    if (this.results.length === 0) {
-      void this.presentAlert('No scanned results found for this subject.');
-    }
-    this.showAnalysis = false;
+  async goToScannedResults(subjectId: number) {
+    // Navigate to TOS in "Students" view, where per-student scores and analysis live.
+    await this.navCtrl.navigateForward(`/tos/${this.classId}/${subjectId}`, {
+      queryParams: { view: 'students' }
+    });
   }
 
   toggleAnalysis() {
@@ -257,9 +254,14 @@ export class SubjectListPage implements OnInit {
     });
   }
 
-  // 🔹 Load and compute analysis
-  loadAnalysis() {
-    this.results = LocalDataService.getResultsBySubject(this.classId, this.subjectId);
+  // 🔹 Load and compute analysis (kept for future use, currently unused entrypoint)
+  async loadAnalysis() {
+    // This method is retained for potential future subject-level analysis UI.
+    let results: ScannedResult[] = this.results;
+    if (!results.length) {
+      results = LocalDataService.getResultsBySubject(this.classId, this.subjectId);
+    }
+    this.results = results;
     if (this.results.length === 0) return;
 
     this.meanPercentage = LocalDataService.getMeanPercentage(this.classId, this.subjectId);
@@ -268,7 +270,6 @@ export class SubjectListPage implements OnInit {
     this.aggregatedAnswerDist = LocalDataService.getAggregatedAnswerDistribution(this.classId, this.subjectId);
     this.aggregatedCognitive = LocalDataService.getAggregatedCognitiveBreakdown(this.classId, this.subjectId);
 
-    // Ensure canvases exist before rendering
     setTimeout(() => {
       this.renderAggregatedAnswerChart();
       this.renderAggregatedCognitiveChart();

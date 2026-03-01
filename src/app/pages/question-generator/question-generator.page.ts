@@ -136,21 +136,19 @@ export class QuestionGeneratorPage implements OnInit {
       this.selectedTopic = this.topicOptions[0];
     }
 
-    await this.loadTosFromFirebase();
+    // Load TOS and questions from Firebase in parallel.
+    const [tosRes, qRes] = await Promise.all([
+      this.loadTosFromFirebase(),
+      this.teacherService.loadSubjectQuestions(this.classId, this.subjectId)
+    ]);
 
-    // Prefer Firebase-saved questions over local cache.
-    try {
-      const qRes = await this.teacherService.loadSubjectQuestions(this.classId, this.subjectId);
-      if (qRes.success && Array.isArray(qRes.questions) && qRes.questions.length) {
-        this.questions = qRes.questions as any[];
-        this.refreshDisplayQuestions();
-        if (subject) {
-          subject.questions = this.questions;
-          await LocalDataService.save();
-        }
+    if (qRes.success && Array.isArray(qRes.questions) && qRes.questions.length) {
+      this.questions = qRes.questions as any[];
+      this.refreshDisplayQuestions();
+      if (subject) {
+        subject.questions = this.questions;
+        void LocalDataService.save();
       }
-    } catch (e) {
-      console.error(e);
     }
 
     if (this.topicOptions.length && !this.topicOptions.includes(this.selectedTopic)) {

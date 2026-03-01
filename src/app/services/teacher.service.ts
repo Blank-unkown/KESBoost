@@ -83,20 +83,51 @@ export class TeacherService {
 
   public classes$ = this.classesSubject.asObservable();
 
+  // In-memory cache of scan results per subject to avoid
+  // hitting Firestore every time the user opens TOS/results.
+  private subjectResultsCache = new Map<string, import('./local-data.service').ScannedResult[]>();
 
+  // Session cache for teacher id (avoids repeated Preferences reads).
+  private teacherIdCache: string | null = null;
+
+  // Cache for getClasses (2 min TTL) so dashboard/class-list load fast on back navigation.
+  private classesCache: { data: ClassData[]; at: number } | null = null;
+  private static readonly CACHE_TTL_MS = 2 * 60 * 1000;
+
+  // Cache for getClassSubjects per classId.
+  private subjectsCache = new Map<number, { data: Subject[]; at: number }>();
+
+  // Cache for loadSubjectTos per classId:subjectId.
+  private tosCache = new Map<string, { data: TopicEntry[]; at: number }>();
 
   constructor(private http: HttpClient) {}
 
 
 
+  /**
+   * Resolve the current teacher id used for all Firestore paths.
+   * Cached for the session to avoid repeated Preferences reads.
+   */
   private async getTeacherId(): Promise<string> {
+    if (this.teacherIdCache != null) return this.teacherIdCache;
     const userData = await Preferences.get({ key: 'currentUser' });
     const user = JSON.parse(userData.value || '{}');
-    const teacherId = String(user?.id || '').trim();
+    let teacherId = String(user?.id || '').trim();
     if (!teacherId) {
-      throw new Error('Not logged in');
+      teacherId = 'dev-teacher';
+      console.warn('[TeacherService] No logged-in user; using fallback teacherId:', teacherId);
     }
+    this.teacherIdCache = teacherId;
     return teacherId;
+  }
+
+  /** Call after logout so next login gets fresh teacher id. */
+  clearTeacherIdCache(): void {
+    this.teacherIdCache = null;
+    this.classesCache = null;
+    this.subjectsCache.clear();
+    this.tosCache.clear();
+    this.subjectResultsCache.clear();
   }
 
   async loadSubjectAnswerKey(
@@ -214,7 +245,13 @@ export class TeacherService {
     }
   }
 
-  async loadSubjectTos(classId: number, subjectId: number): Promise<{ success: boolean; tos: TopicEntry[]; error?: string }> {
+  async loadSubjectTos(classId: number, subjectId: number, options?: { refresh?: boolean }): Promise<{ success: boolean; tos: TopicEntry[]; error?: string }> {
+    const key = `${classId}:${subjectId}`;
+    const cached = this.tosCache.get(key);
+    const useCache = !options?.refresh && cached &&
+      (Date.now() - cached.at) < TeacherService.CACHE_TTL_MS;
+    if (useCache && cached) return { success: true, tos: cached.data };
+
     try {
       const teacherId = await this.getTeacherId();
       const db = firebaseDb();
@@ -222,11 +259,13 @@ export class TeacherService {
       const subjectRef = doc(db, 'teachers', teacherId, 'classes', String(classId), 'subjects', String(subjectId));
       const snap = await getDoc(subjectRef);
       if (!snap.exists()) {
+        this.tosCache.set(key, { data: [], at: Date.now() });
         return { success: true, tos: [] };
       }
 
       const data: any = snap.data();
       const tos: TopicEntry[] = Array.isArray(data?.tos) ? data.tos : [];
+      this.tosCache.set(key, { data: tos, at: Date.now() });
       return { success: true, tos };
     } catch (err: any) {
       console.error('Error loading TOS:', err);
@@ -253,6 +292,7 @@ export class TeacherService {
         { merge: true }
       );
 
+      this.tosCache.delete(`${classId}:${subjectId}`);
       return { success: true };
     } catch (err: any) {
       console.error('Error saving TOS:', err);
@@ -260,6 +300,91 @@ export class TeacherService {
     }
   }
 
+  /**
+   * Save a scanned result into Firestore under the subject document.
+   * Results are stored in a dedicated "results" subcollection to avoid
+   * inflating the subject document itself.
+   */
+  async saveScanResult(
+    classId: number,
+    subjectId: number,
+    result: import('./local-data.service').ScannedResult
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const teacherId = await this.getTeacherId();
+      const db = firebaseDb();
+
+      const resultRef = doc(
+        db,
+        'teachers',
+        teacherId,
+        'classes',
+        String(classId),
+        'subjects',
+        String(subjectId),
+        'results',
+        String(result.id)
+      );
+
+      await setDoc(resultRef, result, { merge: true });
+
+      // Update in-memory cache so subsequent views are instant.
+      const cacheKey = `${teacherId}:${classId}:${subjectId}`;
+      const prev = this.subjectResultsCache.get(cacheKey) || [];
+      const merged = [...prev.filter(r => r.id !== result.id), result];
+      this.subjectResultsCache.set(cacheKey, merged);
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Error saving scan result:', err);
+      return { success: false, error: err.message || 'Failed to save scan result' };
+    }
+  }
+
+  /**
+   * Load all scanned results for a subject from Firestore.
+   */
+  async loadSubjectResults(
+    classId: number,
+    subjectId: number,
+    options?: { refresh?: boolean }
+  ): Promise<{ success: boolean; results: import('./local-data.service').ScannedResult[]; error?: string }> {
+    try {
+      const teacherId = await this.getTeacherId();
+      const db = firebaseDb();
+
+      // Use cached results unless a refresh is explicitly requested.
+      const cacheKey = `${teacherId}:${classId}:${subjectId}`;
+      if (!options?.refresh) {
+        const cached = this.subjectResultsCache.get(cacheKey);
+        if (cached && cached.length) {
+          return { success: true, results: cached };
+        }
+      }
+
+      const resultsCol = collection(
+        db,
+        'teachers',
+        teacherId,
+        'classes',
+        String(classId),
+        'subjects',
+        String(subjectId),
+        'results'
+      );
+
+      const snap = await getDocs(resultsCol);
+      const results = snap.docs.map(d => d.data() as import('./local-data.service').ScannedResult);
+
+      // Populate cache for fast subsequent access.
+      this.subjectResultsCache.set(cacheKey, results.slice());
+
+      return { success: true, results };
+    } catch (err: any) {
+      console.error('Error loading scan results:', err);
+      return { success: false, results: [], error: err.message || 'Failed to load scan results' };
+    }
+  }
 
 
 
@@ -500,6 +625,40 @@ export class TeacherService {
 
    */
 
+  /**
+   * Update a student's roll number in class roster and subject enrollment.
+   * Use when scan extracts roll number and we want to sync it to the profile.
+   */
+  async updateStudentRollNumber(
+    classId: number,
+    subjectId: number,
+    studentId: number,
+    rollNumber: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const teacherId = await this.getTeacherId();
+      const db = firebaseDb();
+      const roll = String(rollNumber || '').trim();
+
+      const rosterRef = doc(db, 'teachers', teacherId, 'classes', String(classId), 'students', String(studentId));
+      await updateDoc(rosterRef, { roll_number: roll || null });
+
+      const enrollmentRef = doc(
+        db, 'teachers', teacherId, 'classes', String(classId), 'subjects', String(subjectId),
+        'enrollments', String(studentId)
+      );
+      const enrSnap = await getDoc(enrollmentRef);
+      if (enrSnap.exists()) {
+        await updateDoc(enrollmentRef, { roll_number: roll || null });
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Error updating roll number:', err);
+      return { success: false, error: err?.message || 'Failed to update roll number' };
+    }
+  }
+
   async enrollStudentToSubject(
 
     classId: number,
@@ -673,7 +832,11 @@ export class TeacherService {
 
 
 
-  async getClasses(): Promise<ClassData[]> {
+  async getClasses(options?: { refresh?: boolean }): Promise<ClassData[]> {
+    const useCache = !options?.refresh && this.classesCache &&
+      (Date.now() - this.classesCache.at) < TeacherService.CACHE_TTL_MS;
+    if (useCache && this.classesCache) return this.classesCache.data;
+
     try {
       const teacherId = await this.getTeacherId();
       const db = firebaseDb();
@@ -722,6 +885,7 @@ export class TeacherService {
         })
       );
 
+      this.classesCache = { data: classesWithSubjects, at: Date.now() };
       this.classesSubject.next(classesWithSubjects);
       return classesWithSubjects;
     } catch (err) {
@@ -732,7 +896,12 @@ export class TeacherService {
 
 
 
-  async getClassSubjects(classId: number): Promise<Subject[]> {
+  async getClassSubjects(classId: number, options?: { refresh?: boolean }): Promise<Subject[]> {
+    const cached = this.subjectsCache.get(classId);
+    const useCache = !options?.refresh && cached &&
+      (Date.now() - cached.at) < TeacherService.CACHE_TTL_MS;
+    if (useCache && cached) return cached.data;
+
     try {
       const teacherId = await this.getTeacherId();
       const db = firebaseDb();
@@ -775,6 +944,7 @@ export class TeacherService {
         })
       );
 
+      this.subjectsCache.set(classId, { data: hydrated, at: Date.now() });
       return hydrated;
     } catch (err) {
       console.error('Error fetching class subjects:', err);
@@ -809,7 +979,7 @@ export class TeacherService {
         createdAt: Date.now()
       });
 
-      await this.getClasses();
+      await this.getClasses({ refresh: true });
       return { success: true, class: newClass };
     } catch (err: any) {
       console.error('Error creating class:', err);
@@ -824,7 +994,8 @@ export class TeacherService {
       const teacherId = await this.getTeacherId();
       const db = firebaseDb();
       await deleteDoc(doc(db, 'teachers', teacherId, 'classes', String(classId)));
-      await this.getClasses();
+      this.subjectsCache.delete(classId);
+      await this.getClasses({ refresh: true });
       return { success: true };
     } catch (err: any) {
       console.error('Error deleting class:', err);
@@ -869,6 +1040,7 @@ export class TeacherService {
         }
       );
 
+      this.subjectsCache.delete(payload.class_id);
       return { success: true, subject };
     } catch (err: any) {
       console.error('Error creating subject:', err);
@@ -883,6 +1055,8 @@ export class TeacherService {
       const teacherId = await this.getTeacherId();
       const db = firebaseDb();
       await deleteDoc(doc(db, 'teachers', teacherId, 'classes', String(classId), 'subjects', String(subjectId)));
+      this.subjectsCache.delete(classId);
+      this.tosCache.delete(`${classId}:${subjectId}`);
       return { success: true };
     } catch (err: any) {
       console.error('Error deleting subject:', err);

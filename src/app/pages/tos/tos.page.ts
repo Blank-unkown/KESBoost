@@ -32,6 +32,7 @@ export class TosPage implements OnInit {
   isLoadingStudents = false;
   selectedStudentId: number | null = null;
   studentSummaryById = new Map<number, { attempts: number; avgPct: number; latest?: ScannedResult }>();
+  private subjectResults: ScannedResult[] = [];
 
   topicJumpIndex: number | null = null;
   private expandedTopicIndexes = new Set<number>();
@@ -57,13 +58,37 @@ getTotal(field: keyof TopicEntry): number {
 
   private recomputeStudentSummaries() {
     this.studentSummaryById.clear();
+    const allResults = (this.subjectResults && this.subjectResults.length)
+      ? this.subjectResults
+      : LocalDataService.getResultsBySubject(this.classId, this.subjectId);
+
     for (const s of this.students || []) {
-      const results = LocalDataService.getResultsByStudent(this.classId, this.subjectId, s.id);
-      const attempts = results.length;
+      const sid = Number(s.id);
+      const roll = String(s.roll_number || '').trim();
+      const name = String(s.name || '').trim().toLowerCase();
+
+      const resultsForStudent = (allResults || []).filter(r => {
+        if (Number((r as any).studentId) === sid) return true;
+        if (roll && String((r as any).rollNumber || '').trim() === roll) return true;
+        if (name && String((r as any).studentName || '').trim().toLowerCase() === name) return true;
+        return false;
+      });
+
+      const attempts = resultsForStudent.length;
       const avgPct = attempts
-        ? results.reduce((sum, r) => sum + ((Number(r.total) > 0) ? (Number(r.score) / Number(r.total)) * 100 : 0), 0) / attempts
+        ? resultsForStudent.reduce((sum, r) => {
+            const total = Number(r.total) || 0;
+            const score = Number(r.score) || 0;
+            return sum + (total > 0 ? (score / total) * 100 : 0);
+          }, 0) / attempts
         : 0;
-      const latest = LocalDataService.getLatestResultByStudent(this.classId, this.subjectId, s.id);
+
+      const latest = (resultsForStudent || []).slice().sort((a, b) => {
+        const ta = Date.parse(String(a.timestamp || '')) || 0;
+        const tb = Date.parse(String(b.timestamp || '')) || 0;
+        return tb - ta;
+      })[0];
+
       this.studentSummaryById.set(s.id, { attempts, avgPct, latest: latest || undefined });
     }
   }
@@ -97,6 +122,30 @@ getTotal(field: keyof TopicEntry): number {
   getSelectedStudentSummary(): { attempts: number; avgPct: number; latest?: ScannedResult } | undefined {
     if (!this.selectedStudentId) return undefined;
     return this.studentSummaryById.get(this.selectedStudentId);
+  }
+
+  getSelectedStudentTopicBreakdown(): { topic: string; competency: string; level: string; correct: number; total: number; percent: number }[] {
+    const s = this.getSelectedStudent();
+    if (!s) return [];
+    return LocalDataService.getStudentTopicBreakdown(this.classId, this.subjectId, s.id, s.roll_number);
+  }
+
+  getStrongestTopics(): { topic: string; percent: number }[] {
+    const rows = this.getSelectedStudentTopicBreakdown();
+    return rows
+      .filter(r => r.total >= 2)
+      .sort((a, b) => b.percent - a.percent)
+      .slice(0, 5)
+      .map(r => ({ topic: r.topic, percent: r.percent }));
+  }
+
+  getWeakestTopics(): { topic: string; percent: number }[] {
+    const rows = this.getSelectedStudentTopicBreakdown();
+    return rows
+      .filter(r => r.total >= 2)
+      .sort((a, b) => a.percent - b.percent)
+      .slice(0, 5)
+      .map(r => ({ topic: r.topic, percent: r.percent }));
   }
 
   getStudentLatestLabel(studentId: number): string {
@@ -187,6 +236,11 @@ getTotal(field: keyof TopicEntry): number {
     this.classId = Number(this.route.snapshot.paramMap.get('classId'));
     this.subjectId = Number(this.route.snapshot.paramMap.get('subjectId'));
 
+    const initialView = this.route.snapshot.queryParamMap.get('view');
+    if (initialView === 'students' || initialView === 'answersheet' || initialView === 'edit' || initialView === 'print') {
+      this.viewMode = initialView as any;
+    }
+
     const cls = LocalDataService.getClass(this.classId);
     const subject = LocalDataService.getSubject(this.classId, this.subjectId);
 
@@ -197,9 +251,12 @@ getTotal(field: keyof TopicEntry): number {
     // Default: expand first topic (if any)
     if (this.tos.length) this.expandedTopicIndexes.add(0);
 
-    await this.loadTosFromFirebase();
-
-    await this.loadStudents();
+    // Load TOS, scan results, and students in parallel for faster startup.
+    await Promise.all([
+      this.loadTosFromFirebase(),
+      this.refreshResultsForStudents(),
+      this.loadStudents()
+    ]);
 
     this.totalItems = this.tos.reduce((sum, row) => {
       return (
@@ -235,7 +292,6 @@ getTotal(field: keyof TopicEntry): number {
       if (res.success) {
         this.tos = res.tos || [];
         LocalDataService.saveTOS(this.classId, this.subjectId, this.tos);
-        await LocalDataService.save();
         this.recomputeTotals();
       }
     } catch (e) {
@@ -243,6 +299,47 @@ getTotal(field: keyof TopicEntry): number {
     } finally {
       this.isLoadingTos = false;
     }
+  }
+
+  /**
+   * Refresh scan results for this subject and recompute per-student summaries.
+   * Called on init and whenever the page becomes active again so that
+   * newly scanned results immediately appear as the student's "latest" attempt.
+   */
+  private async refreshResultsForStudents() {
+    // Merge remote + local so that very recent scans (saved locally first)
+    // are not lost if Firestore has not yet returned them.
+    try {
+      const localResults = LocalDataService.getResultsBySubject(this.classId, this.subjectId) || [];
+      const res = await this.teacherService.loadSubjectResults(this.classId, this.subjectId);
+
+      const mergedMap = new Map<number, ScannedResult>();
+      for (const r of localResults) {
+        mergedMap.set(r.id, r);
+      }
+      if (res.success && Array.isArray(res.results)) {
+        for (const r of res.results) {
+          mergedMap.set(r.id, r);
+        }
+      }
+
+      this.subjectResults = Array.from(mergedMap.values());
+      LocalDataService.setSubjectResults(this.classId, this.subjectId, this.subjectResults);
+    } catch (e) {
+      console.error('Failed to load scan results for TOS page', e);
+      this.subjectResults = LocalDataService.getResultsBySubject(this.classId, this.subjectId);
+    }
+
+    if (this.students && this.students.length) {
+      this.recomputeStudentSummaries();
+    }
+  }
+
+  // Re-run result refresh whenever we come back to this page (e.g. after scanning),
+  // so "View Latest Result" always points to the newest attempt.
+  async ionViewWillEnter() {
+    if (!this.classId || !this.subjectId) return;
+    await this.refreshResultsForStudents();
   }
 
   setMode(mode: 'edit' | 'print' | 'answersheet' | 'students') {

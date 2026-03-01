@@ -11,6 +11,7 @@ import { FormsModule } from '@angular/forms';
 import Chart from 'chart.js/auto';
 import { HttpClientModule } from '@angular/common/http';
 import { TopicEntry } from '../../services/local-data.service';
+import { TeacherService } from '../../services/teacher.service';
 
 
 interface TosRowAnalysis {
@@ -47,37 +48,66 @@ export class ResultviewerPage implements OnInit, AfterViewInit {
   private topicChart?: Chart;
   private competencyChart?: Chart;
 
-  constructor(private route: ActivatedRoute) {}
+  constructor(
+    private route: ActivatedRoute,
+    private teacherService: TeacherService
+  ) {}
 
   ngOnInit() {
-  const stateResult = history.state?.resultData;
+    const stateResult = history.state?.resultData;
 
-  if (stateResult) {
-    this.result = stateResult;
-    this.buildTosAnalysis();
-  } else {
+    if (stateResult) {
+      this.result = stateResult;
+      this.classId = Number((stateResult as any).classId || 0);
+      this.subjectId = Number((stateResult as any).subjectId || 0);
+      this.buildTosAnalysis();
+      if (this.result?.tosRows) {
+        this.tosRowView = this.buildTosRowView(this.result.tosRows);
+      }
+      return;
+    }
+
     this.route.queryParams.subscribe(params => {
       this.classId = +params['classId'];
       this.subjectId = +params['subjectId'];
       this.resultId = +params['resultId'];
-
-      const subject = LocalDataService.getSubject(this.classId, this.subjectId);
-      this.result = subject?.results?.find(r => r.id === this.resultId);
-
-      this.buildTosAnalysis();
-
-      // 🔹 move inside subscription
-      if (this.result?.tosRows) {
-        this.tosRowView = this.buildTosRowView(this.result.tosRows);
-      }
+      void this.resolveResultFromStoreOrFirebase();
     });
   }
 
-  // 🔹 also handle the stateResult case here
-  if (this.result?.tosRows) {
-    this.tosRowView = this.buildTosRowView(this.result.tosRows);
+  private async resolveResultFromStoreOrFirebase() {
+    // Ensure local cache is loaded from storage at least once.
+    await LocalDataService.load();
+
+    // 1) Try in-memory LocalDataService cache
+    let subject = LocalDataService.getSubject(this.classId, this.subjectId);
+    this.result = subject?.results?.find(r => r.id === this.resultId);
+
+    // 2) Fallback: pull from Firebase if not found locally
+    if (!this.result) {
+      try {
+        const res = await this.teacherService.loadSubjectResults(this.classId, this.subjectId);
+        if (res.success && Array.isArray(res.results)) {
+          // Prefer direct lookup from remote results so this works
+          // even if LocalDataService does not yet have a subject entry.
+          this.result = res.results.find(r => r.id === this.resultId);
+
+          // Hydrate LocalDataService cache when a subject exists.
+          subject = LocalDataService.getSubject(this.classId, this.subjectId);
+          if (subject) {
+            LocalDataService.setSubjectResults(this.classId, this.subjectId, res.results || []);
+          }
+        }
+      } catch (err) {
+        console.error('Resultviewer: failed to load results from Firebase', err);
+      }
+    }
+
+    this.buildTosAnalysis();
+    if (this.result?.tosRows) {
+      this.tosRowView = this.buildTosRowView(this.result.tosRows);
+    }
   }
-}
 
 
   ngAfterViewInit() {
@@ -91,14 +121,36 @@ export class ResultviewerPage implements OnInit, AfterViewInit {
     }, 500);
   }
 
+  /** Topics this student is strong at (highest % first). */
+  get strongestTopics(): { topic: string; correct: number; total: number; percent: number }[] {
+    return this.tosAnalysis
+      .filter(r => r.total >= 1)
+      .map(r => ({ topic: r.topic, correct: r.correct, total: r.total, percent: r.percentScore }))
+      .sort((a, b) => b.percent - a.percent)
+      .slice(0, 5);
+  }
+
+  /** Topics that need improvement (lowest % first). */
+  get weakestTopics(): { topic: string; correct: number; total: number; percent: number }[] {
+    return this.tosAnalysis
+      .filter(r => r.total >= 1)
+      .map(r => ({ topic: r.topic, correct: r.correct, total: r.total, percent: r.percentScore }))
+      .sort((a, b) => a.percent - b.percent)
+      .slice(0, 3);
+  }
+
   // ✅ Build TOS Row Analysis
   private buildTosAnalysis() {
     if (!this.result) return;
 
     const subject = LocalDataService.getSubject(this.classId, this.subjectId);
-    if (!subject?.tosRows) return;
+    let tosRows = subject?.tosRows;
+    if (!tosRows?.length && this.result.tosRows?.length) {
+      tosRows = LocalDataService.generateTOSRows(this.result.tosRows as any);
+    }
+    if (!tosRows?.length) return;
 
-    this.tosAnalysis = subject.tosRows.map((row: any) => {
+    this.tosAnalysis = tosRows.map((row: any) => {
       const start = row.startQuestion;
       const end = row.endQuestion;
       const rowAnswers = this.result!.answers.filter(

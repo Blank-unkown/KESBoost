@@ -1,16 +1,18 @@
 import { Component, ElementRef, ViewChild, AfterViewInit, OnDestroy, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { IonicModule, Platform, AlertController } from '@ionic/angular';
-import { ActivatedRoute, Router } from '@angular/router';
+import { IonicModule, AlertController } from '@ionic/angular';
+import { ActivatedRoute } from '@angular/router';
 import { HttpClientModule } from '@angular/common/http';
 
 import { CameraService } from '../../services/camera.service';
 import { TeacherService } from '../../services/teacher.service';
-import { LocalDataService } from '../../services/local-data.service';
-import { bubbles, BubbleTemplate, Option } from '../../data/bubble-template';
+import { LocalDataService, ScannedResult, AnswerEntry, TopicEntry } from '../../services/local-data.service';
+import { bubbles } from '../../data/bubble-template';
 import { OmrLiteService } from '../../services/omr-lite.service';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import jsQR from 'jsqr';
+import type { ClassStudent } from '../../services/teacher.service';
 
 interface GradingResult {
   questionNumber: number;
@@ -51,7 +53,15 @@ export class ScanPage implements AfterViewInit, OnDestroy {
   examTitle = 'Exam Results';
   answerKey: string[] = [];
   gradingResults: GradingResult[] = [];
-  
+  lastCapturedImageData: string | null = null;
+
+  // Save to profile
+  students: ClassStudent[] = [];
+  rollNumberInput = '';
+  selectedStudentId: number | null = null;
+  isSaving = false;
+  saveSuccess = false;
+
   // Stats
   score = 0;
   total = 0;
@@ -102,37 +112,58 @@ export class ScanPage implements AfterViewInit, OnDestroy {
 
   async initScanner() {
     this.statusMessage = 'Initializing...';
-    
-    // 1. Start camera immediately so user sees something
+    await LocalDataService.load();
+
     try {
-      await this.startCamera();
+      // Start camera and load answer key in parallel for faster ready state.
+      await Promise.all([this.startCamera(), this.loadAnswerKey()]);
       this.statusMessage = 'Ready to scan';
       this.isProcessing = false;
     } catch (e: any) {
       console.error('Camera failed', e);
       this.lastError = 'Camera access denied or failed.';
-      return; 
+      return;
     }
-
-    // 2. Load answer key
-    await this.loadAnswerKey();
   }
 
   async loadAnswerKey() {
+    const subject = LocalDataService.getSubject(this.classId, this.subjectId);
+    const tos: any[] = Array.isArray(subject?.tos) ? subject!.tos : [];
+    const questions: any[] = Array.isArray(subject?.questions) ? subject!.questions : [];
+    const cachedKey: any[] = Array.isArray(subject?.answerKey) ? subject!.answerKey! : [];
+
     const res = await this.teacherService.loadSubjectAnswerKey(this.classId, this.subjectId);
-    if (res.success && res.answerKey && res.answerKey.length > 0) {
-      // Ensure we have exactly 50 entries if the template expects 50
-      this.answerKey = res.answerKey;
-      if (this.answerKey.length < 50) {
-        const padding = Array(50 - this.answerKey.length).fill('A');
-        this.answerKey = [...this.answerKey, ...padding];
-      }
-    } else {
-      // Fallback/Mock for development - Ensure 50 items
-      this.answerKey = Array(50).fill('A').map((_, i) => ['A','B','C','D'][i % 4]);
-      console.warn('Using 50-item mock answer key');
-    }
-    this.total = this.answerKey.length;
+    const remoteKey: any[] = (res.success && Array.isArray(res.answerKey)) ? res.answerKey : [];
+
+    const normalize = (v: any): string => {
+      const s = String(v || '').trim().toUpperCase();
+      return (s === 'A' || s === 'B' || s === 'C' || s === 'D') ? s : '';
+    };
+
+    const keyBase = (remoteKey.length ? remoteKey : cachedKey).map(normalize);
+
+    const computeTotalQuestionsFromTos = (rows: any[]): number => {
+      const cognitiveLevels = ['remembering', 'understanding', 'applying', 'analyzing', 'evaluating', 'creating'];
+      return (Array.isArray(rows) ? rows : []).reduce((sum, row) => {
+        return sum + cognitiveLevels.reduce((s, k) => s + Number((row as any)?.[k] || 0), 0);
+      }, 0);
+    };
+
+    const expectedFromQuestions = Array.isArray(questions) ? questions.length : 0;
+    const expectedFromTos = computeTotalQuestionsFromTos(tos);
+    const expectedFromKey = keyBase.length;
+
+    const expectedQuestionsRaw =
+      expectedFromQuestions > 0 ? expectedFromQuestions :
+      expectedFromTos > 0 ? expectedFromTos :
+      expectedFromKey > 0 ? expectedFromKey :
+      50;
+
+    const expectedQuestions = Math.max(1, Math.min(Number(expectedQuestionsRaw || 0), bubbles.length));
+
+    // Ensure we only grade questions that exist on the generated sheet for this subject.
+    this.answerKey = new Array(expectedQuestions).fill('').map((_, i) => keyBase[i] || '');
+    this.total = expectedQuestions;
   }
 
   async startCamera() {
@@ -244,14 +275,45 @@ export class ScanPage implements AfterViewInit, OnDestroy {
 
     try {
       const canvas = this.canvasRef.nativeElement;
-      const result = this.omrLite.processFrame(canvas, this.answerKey);
-      
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      // 1) QR-first: try to decode any standard QR in the frame
+      let qrStudentId: number | null = null;
+      if (ctx) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const qr = jsQR(imageData.data, imageData.width, imageData.height);
+        if (qr?.data) {
+          // Expect payload like "QR:classId:subjectId:studentId" but we only trust studentId.
+          const parts = String(qr.data).split(':');
+          if (parts.length >= 4 && parts[0] === 'QR') {
+            const stuId = Number(parts[3] || 0);
+            if (Number.isFinite(stuId)) {
+              qrStudentId = stuId;
+            }
+          }
+        }
+      }
+
+      // 2) Run OMR grading (also tries to decode our fallback mini-code)
+      const { gradingResults, studentHash } = this.omrLite.processFrame(canvas, this.answerKey);
+
+      this.lastCapturedImageData = canvas.toDataURL('image/jpeg', 0.85);
+      this.saveSuccess = false;
+
       this.ngZone.run(() => {
-        this.gradingResults = result;
+        this.gradingResults = gradingResults;
         this.calculateStats();
         this.showResults = true;
         this.isProcessing = false;
         this.statusMessage = 'Ready to scan';
+        void this.loadStudentsForSave().then(() => {
+          // Prefer explicit QR student id if available, otherwise fallback hash
+          if (qrStudentId != null) {
+            this.autoAttachByExactId(qrStudentId);
+          } else if (studentHash != null) {
+            this.autoAttachByHash(studentHash);
+          }
+        });
       });
     } catch (e: any) {
       console.error('OMR Lite Error', e);
@@ -294,13 +356,39 @@ export class ScanPage implements AfterViewInit, OnDestroy {
           if (ctx) {
             ctx.drawImage(img, 0, 0);
             try {
-              const result = this.omrLite.processFrame(canvas, this.answerKey);
+              const ctx2 = canvas.getContext('2d', { willReadFrequently: true });
+
+              let qrStudentId: number | null = null;
+              if (ctx2) {
+                const imageData = ctx2.getImageData(0, 0, canvas.width, canvas.height);
+                const qr = jsQR(imageData.data, imageData.width, imageData.height);
+                if (qr?.data) {
+                  const parts = String(qr.data).split(':');
+                  if (parts.length >= 4 && parts[0] === 'QR') {
+                    const stuId = Number(parts[3] || 0);
+                    if (Number.isFinite(stuId)) {
+                      qrStudentId = stuId;
+                    }
+                  }
+                }
+              }
+
+              const { gradingResults, studentHash } = this.omrLite.processFrame(canvas, this.answerKey);
+              this.lastCapturedImageData = canvas.toDataURL('image/jpeg', 0.85);
+              this.saveSuccess = false;
               this.ngZone.run(() => {
-                this.gradingResults = result;
+                this.gradingResults = gradingResults;
                 this.calculateStats();
                 this.showResults = true;
                 this.isProcessing = false;
                 this.statusMessage = 'Ready to scan';
+                void this.loadStudentsForSave().then(() => {
+                  if (qrStudentId != null) {
+                    this.autoAttachByExactId(qrStudentId as number);
+                  } else if (studentHash != null) {
+                    this.autoAttachByHash(studentHash);
+                  }
+                });
               });
             } catch (err: any) {
               this.ngZone.run(() => {
@@ -357,7 +445,164 @@ export class ScanPage implements AfterViewInit, OnDestroy {
     this.gradingResults = [];
     this.score = 0;
     this.lastError = '';
+    this.lastCapturedImageData = null;
+    this.saveSuccess = false;
+    this.rollNumberInput = '';
+    this.selectedStudentId = null;
     this.startCamera();
+  }
+
+  async loadStudentsForSave() {
+    if (!this.classId || !this.subjectId) return;
+    try {
+      this.students = await this.teacherService.getSubjectStudentsForClass(this.classId, this.subjectId);
+      this.tryMatchStudentByRoll();
+    } catch (e) {
+      console.error('Failed to load students', e);
+      this.students = [];
+    }
+  }
+
+  autoAttachByHash(studentHash: number) {
+    const match = (this.students || []).find(
+      s => (Number(s.id) & 0xffff) === (Number(studentHash) & 0xffff)
+    );
+    if (!match) return;
+    this.selectedStudentId = match.id;
+    this.rollNumberInput = String(match.roll_number || '');
+  }
+
+  autoAttachByExactId(studentId: number) {
+    const match = (this.students || []).find(
+      s => Number(s.id) === Number(studentId)
+    );
+    if (!match) return;
+    this.selectedStudentId = match.id;
+    this.rollNumberInput = String(match.roll_number || '');
+  }
+
+  tryMatchStudentByRoll() {
+    const roll = String(this.rollNumberInput || '').trim();
+    if (!roll) {
+      this.selectedStudentId = null;
+      return;
+    }
+    const match = (this.students || []).find(s => String(s.roll_number || '').trim().toLowerCase() === roll.toLowerCase());
+    this.selectedStudentId = match ? match.id : null;
+  }
+
+  onRollNumberChange() {
+    this.tryMatchStudentByRoll();
+  }
+
+  onStudentSelected(event: any) {
+    const id = event?.detail?.value;
+    this.selectedStudentId = id ?? null;
+    const s = (this.students || []).find(st => Number(st.id) === Number(id));
+    if (s?.roll_number) this.rollNumberInput = String(s.roll_number);
+  }
+
+  get matchedStudent(): ClassStudent | undefined {
+    if (!this.selectedStudentId) return undefined;
+    return (this.students || []).find(s => Number(s.id) === Number(this.selectedStudentId));
+  }
+
+  async saveToProfile() {
+    const roll = String(this.rollNumberInput || '').trim();
+    const student = this.matchedStudent;
+
+    if (!roll && !student) {
+      await this.alertCtrl.create({
+        header: 'Select Student',
+        message: 'Enter the roll number from the sheet, or pick a student from the list.',
+        buttons: ['OK']
+      }).then(a => a.present());
+      return;
+    }
+
+    this.isSaving = true;
+    try {
+      const subject = LocalDataService.getSubject(this.classId, this.subjectId);
+      const tos = subject?.tos || [];
+      const tosRows = subject?.tosRows || LocalDataService.generateTOSRows(tos);
+      const tosMap = LocalDataService.generateTOSMap(tos);
+
+      const answers: AnswerEntry[] = this.gradingResults.map((r, i) => {
+        const mapEntry = tosMap[r.questionNumber - 1];
+        return {
+          question: r.questionNumber,
+          marked: r.detectedAnswer,
+          correctAnswer: r.correctAnswer || null,
+          correct: r.status === 'Correct',
+          topic: mapEntry?.topic ?? null,
+          competency: mapEntry?.competency ?? null,
+          level: mapEntry?.level ?? null
+        };
+      });
+
+      const answerDistribution: Record<'A'|'B'|'C'|'D', number> = { A: 0, B: 0, C: 0, D: 0 };
+      answers.forEach(a => {
+        if (a.marked && (a.marked === 'A' || a.marked === 'B' || a.marked === 'C' || a.marked === 'D')) {
+          answerDistribution[a.marked]++;
+        }
+      });
+
+      const cognitiveBreakdown: { [level: string]: { correct: number; total: number } } = {};
+      answers.forEach(a => {
+        const level = a.level || 'N/A';
+        if (!cognitiveBreakdown[level]) cognitiveBreakdown[level] = { correct: 0, total: 0 };
+        cognitiveBreakdown[level].total++;
+        if (a.correct) cognitiveBreakdown[level].correct++;
+      });
+
+      const imgData = this.lastCapturedImageData || '';
+
+      const result: ScannedResult = {
+        id: Date.now(),
+        headerImage: imgData,
+        fullImage: imgData,
+        answers,
+        score: this.correctCount,
+        total: this.gradingResults.length,
+        subjectId: this.subjectId,
+        classId: this.classId,
+        studentId: student?.id ?? null,
+        // Prefer typed-in roll number, otherwise fall back to student's existing roll, otherwise null
+        rollNumber: roll || student?.roll_number || null,
+        studentName: student?.name ?? null,
+        timestamp: new Date().toISOString(),
+        answerDistribution,
+        cognitiveBreakdown,
+        tosRows: (subject?.tos || []) as TopicEntry[]
+      };
+
+      LocalDataService.saveScannedResult(this.classId, this.subjectId, result);
+      const remoteRes = await this.teacherService.saveScanResult(this.classId, this.subjectId, result);
+      if (!remoteRes.success) {
+        console.warn('Remote scan save failed:', remoteRes.error);
+      }
+
+      if (student && roll && !String(student.roll_number || '').trim()) {
+        const res = await this.teacherService.updateStudentRollNumber(this.classId, this.subjectId, student.id, roll);
+        if (!res.success) console.warn('Could not update profile roll number:', res.error);
+      }
+
+      this.saveSuccess = true;
+      await this.alertCtrl.create({
+        header: 'Saved',
+        message: `Result saved to ${student?.name || 'profile'} (Roll: ${roll || student?.roll_number || '—'})`,
+        buttons: ['OK']
+      }).then(a => a.present());
+    } catch (e: any) {
+      console.error('Save failed', e);
+      await this.alertCtrl.create({
+        header: 'Save Failed',
+        message: e?.message || 'Could not save result.',
+        buttons: ['OK']
+      }).then(a => a.present());
+    } finally {
+      this.isSaving = false;
+    }
   }
 }
 

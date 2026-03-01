@@ -13,6 +13,7 @@ import { environment } from 'src/environments/environment';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
 import { firebaseAuth, firebaseDb } from '../firebase';
+import { TeacherService } from './teacher.service';
 
 
 
@@ -70,10 +71,11 @@ export class AuthService {
 
 
 
-  constructor(private http: HttpClient) {
-
+  constructor(
+    private http: HttpClient,
+    private teacherService: TeacherService
+  ) {
     this.checkAuth();
-
   }
 
 
@@ -326,6 +328,8 @@ export class AuthService {
     // Only clear auth session keys, preserve app data like examData and settings
     await Preferences.remove({ key: 'currentUser' });
     await Preferences.remove({ key: 'authToken' });
+
+    this.teacherService.clearTeacherIdCache();
 
     this.authSubject.next({
       isAuthenticated: false,

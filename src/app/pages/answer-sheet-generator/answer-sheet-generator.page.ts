@@ -37,6 +37,11 @@ export class AnswerSheetGeneratorPage implements OnInit {
   selectedStudentId: number | 'all' = 'all';
   currentStudentName: string = '';
   currentStudentRollNumber: string = '';
+  private currentStudentId: number | null = null;
+
+  // Small binary grid code (8x8) for student identity
+  private readonly CODE_GRID_SIZE = 8;
+  private readonly CODE_CELL_SIZE = 6; // template pixels
 
   constructor(
     private route: ActivatedRoute,
@@ -94,25 +99,22 @@ export class AnswerSheetGeneratorPage implements OnInit {
     const localSubject = LocalDataService.getSubject(this.classId, this.subjectId);
     if (localSubject?.name) this.subjectName = String(localSubject.name);
 
-    // If names are missing (fresh install / not cached), pull from Firebase lists
-    try {
-      if (!this.className) {
-        const classes = await this.teacherService.getClasses();
-        const c = (classes || []).find((k: any) => Number(k?.id) === Number(this.classId));
+    // If names are missing (fresh install / not cached), pull from Firebase in parallel
+    const needClass = !this.className;
+    const needSubject = !this.subjectName;
+    if (needClass || needSubject) {
+      const [classesRes, subjectsRes] = await Promise.all([
+        needClass ? this.teacherService.getClasses().catch(e => { console.error('resolveClassAndSubjectNames: classes', e); return []; }) : Promise.resolve([]),
+        needSubject ? this.teacherService.getClassSubjects(this.classId).catch(e => { console.error('resolveClassAndSubjectNames: subjects', e); return []; }) : Promise.resolve([])
+      ]);
+      if (needClass && Array.isArray(classesRes)) {
+        const c = classesRes.find((k: any) => Number(k?.id) === Number(this.classId));
         if (c?.name) this.className = String(c.name);
       }
-    } catch (e) {
-      console.error('resolveClassAndSubjectNames: failed to load classes', e);
-    }
-
-    try {
-      if (!this.subjectName) {
-        const subjects = await this.teacherService.getClassSubjects(this.classId);
-        const s = (subjects || []).find((k: any) => Number(k?.id) === Number(this.subjectId));
+      if (needSubject && Array.isArray(subjectsRes)) {
+        const s = subjectsRes.find((k: any) => Number(k?.id) === Number(this.subjectId));
         if (s?.name) this.subjectName = String(s.name);
       }
-    } catch (e) {
-      console.error('resolveClassAndSubjectNames: failed to load subjects', e);
     }
   }
 
@@ -140,33 +142,25 @@ export class AnswerSheetGeneratorPage implements OnInit {
 
     const subject = LocalDataService.getSubject(this.classId, this.subjectId);
     this.tos = subject?.tos || [];
+    this.questions = Array.isArray(subject?.questions) ? (subject?.questions as any[]) : [];
+    const needQuestions = !this.questions.length;
 
-    try {
-      this.students = await this.teacherService.getSubjectStudentsForClass(this.classId, this.subjectId);
-    } catch (e) {
-      console.error(e);
-      this.students = [];
+    const [studentsList, qRes] = await Promise.all([
+      this.teacherService.getSubjectStudentsForClass(this.classId, this.subjectId),
+      needQuestions ? this.teacherService.loadSubjectQuestions(this.classId, this.subjectId) : Promise.resolve({ success: false, questions: [] })
+    ]);
+    this.students = Array.isArray(studentsList) ? studentsList : [];
+
+    if (needQuestions && qRes.success && Array.isArray(qRes.questions) && qRes.questions.length) {
+      this.questions = qRes.questions;
+      if (subject) {
+        subject.questions = this.questions;
+        void LocalDataService.save();
+      }
     }
 
     this.selectedStudentId = 'all';
     this.applySelectedStudent();
-
-    // Prefer saved questions (from Question Generator) for export layout.
-    this.questions = Array.isArray(subject?.questions) ? (subject?.questions as any[]) : [];
-    if (!this.questions.length) {
-      try {
-        const qRes = await this.teacherService.loadSubjectQuestions(this.classId, this.subjectId);
-        if (qRes.success && Array.isArray(qRes.questions)) {
-          this.questions = qRes.questions;
-          if (subject) {
-            subject.questions = this.questions;
-            await LocalDataService.save();
-          }
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
 
     const tosTotal = this.computeTotalQuestionsFromTos(this.tos);
     const qTotal = Array.isArray(this.questions) ? this.questions.length : 0;
@@ -192,6 +186,7 @@ export class AnswerSheetGeneratorPage implements OnInit {
     const st = (this.students || []).find(s => Number(s.id) === idNum);
     this.currentStudentName = st ? String(st.name || '') : '';
     this.currentStudentRollNumber = st ? String(st.roll_number || '') : '';
+    this.currentStudentId = st ? Number(st.id) : null;
   }
 
   get selectedStudentLabel(): string {
@@ -216,6 +211,50 @@ export class AnswerSheetGeneratorPage implements OnInit {
   get exportBubbles(): BubbleTemplate[] {
     const max = Math.min(Number(this.totalQuestions || 0), bubbles.length);
     return bubbles.filter((b) => b.question <= max);
+  }
+
+  /**
+   * Build an 8x8 binary grid encoding (classId, subjectId, studentId).
+   * We only need this for the currently rendered student/page.
+   */
+  get studentCodeGrid(): number[][] {
+    const size = this.CODE_GRID_SIZE;
+    const grid: number[][] = Array.from({ length: size }, () => Array(size).fill(0));
+
+    // Simple finder border (row 0 and col 0 set to 1)
+    for (let i = 0; i < size; i++) {
+      grid[0][i] = 1;
+      grid[i][0] = 1;
+    }
+
+    const classPart = Number(this.classId || 0) & 0xffff;
+    const subjectPart = Number(this.subjectId || 0) & 0xffff;
+    const studentPart = Number(this.currentStudentId || 0) & 0xffff;
+
+    const bits: number[] = [];
+    const pushBits = (value: number) => {
+      for (let i = 15; i >= 0; i--) {
+        bits.push(((value >> i) & 1) ? 1 : 0);
+      }
+    };
+
+    pushBits(classPart);
+    pushBits(subjectPart);
+    pushBits(studentPart);
+
+    // Fill inner 7x7 area (rows 1..7, cols 1..7) row-major
+    let idx = 0;
+    for (let r = 1; r < size; r++) {
+      for (let c = 1; c < size; c++) {
+        if (idx < bits.length) {
+          grid[r][c] = bits[idx++];
+        } else {
+          grid[r][c] = 0;
+        }
+      }
+    }
+
+    return grid;
   }
 
   private svgElementToCanvas(
@@ -280,6 +319,7 @@ export class AnswerSheetGeneratorPage implements OnInit {
       const st = studentsToExport[i];
       this.currentStudentName = String(st?.name || '');
       this.currentStudentRollNumber = String(st?.roll_number || '');
+      this.currentStudentId = Number(st?.id || 0);
 
       // Let Angular update the SVG bindings
       await new Promise((r) => setTimeout(r, 30));

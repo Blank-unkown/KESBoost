@@ -14,6 +14,7 @@ export class LoginPage {
   password = '';
   isLoading = false;
   showPassword = false;
+  loginSuccess = false;
 
   constructor(
     private authService: AuthService,
@@ -23,7 +24,7 @@ export class LoginPage {
 
   async login() {
     if (!this.email || !this.password) {
-      this.showToast('Please fill in all fields');
+      await this.showToast('Please fill in all fields');
       return;
     }
 
@@ -31,10 +32,21 @@ export class LoginPage {
     const result = await this.authService.login(this.email, this.password);
 
     if (result.success) {
-      this.showToast('Login successful!');
-      this.router.navigate(['/dashboard']);
+      this.loginSuccess = true;
+
+      const user = this.authService.getCurrentUser();
+      let target = '/teacher-dashboard';
+      if (user?.userType === 'admin' || user?.userType === 'school') {
+        target = '/admin-dashboard';
+      } else if (user?.userType && user.userType !== 'teacher') {
+        target = '/student-dashboard';
+      }
+
+      setTimeout(() => {
+        void this.router.navigate([target]);
+      }, 700);
     } else {
-      this.showToast(result.message);
+      await this.showToast(result.message);
     }
 
     this.isLoading = false;

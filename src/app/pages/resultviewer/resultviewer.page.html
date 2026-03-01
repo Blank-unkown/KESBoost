@@ -9,16 +9,67 @@
 
 <ion-content class="ion-padding">
   <div *ngIf="result" id="print-area">
-    <h2>Scanned Paper</h2>
-    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-      <img [src]="result.headerImage" alt="Header" style="max-width: 200px; border: 1px solid #ccc;" />
-      <img [src]="result.fullImage" alt="Full Scan" style="max-width: 500px; width: 100%;" />
-    </div>
+    <!-- Scanned paper -->
+    <ion-card class="scan-card">
+      <ion-card-header>
+        <ion-card-title>Scanned Paper</ion-card-title>
+        <ion-card-subtitle *ngIf="result.studentName || result.rollNumber">
+          {{ result.studentName }}<span *ngIf="result.rollNumber"> • Roll: {{ result.rollNumber }}</span>
+        </ion-card-subtitle>
+      </ion-card-header>
+      <ion-card-content>
+        <img *ngIf="result.fullImage" [src]="result.fullImage" alt="Scanned answer sheet" class="scanned-image" />
+        <p *ngIf="!result.fullImage" class="no-image">Scanned image not available for this result.</p>
+      </ion-card-content>
+    </ion-card>
 
-    <h3>Score: {{ result.score }} / {{ result.total }}</h3>
-    <p>Date: {{ result.timestamp | date: 'short' }}</p>
+    <!-- Score summary -->
+    <ion-card class="score-card">
+      <ion-card-header>
+        <ion-card-title>Score</ion-card-title>
+        <ion-card-subtitle>{{ result.timestamp | date: 'medium' }}</ion-card-subtitle>
+      </ion-card-header>
+      <ion-card-content>
+        <div class="score-display">
+          <span class="score-value">{{ result.score }}</span>
+          <span class="score-sep">/</span>
+          <span class="score-total">{{ result.total }}</span>
+          <span class="score-label">correct</span>
+        </div>
+        <div class="score-percent" *ngIf="result.total > 0">
+          {{ (result.score / result.total * 100) | number:'1.0-0' }}%
+        </div>
+      </ion-card-content>
+    </ion-card>
 
-    <!-- ✅ TOS Row Cards -->
+    <!-- Topic analytics: good at / needs improvement -->
+    <ion-card class="analytics-card" *ngIf="strongestTopics.length">
+      <ion-card-header>
+        <ion-card-title>Topics you're good at</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <div class="topic-tags strong">
+          <span class="topic-tag" *ngFor="let t of strongestTopics">
+            {{ t.topic }} — {{ t.correct }}/{{ t.total }} ({{ t.percent }}%)
+          </span>
+        </div>
+      </ion-card-content>
+    </ion-card>
+    <ion-card class="analytics-card weak" *ngIf="weakestTopics.length">
+      <ion-card-header>
+        <ion-card-title>Needs improvement</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <div class="topic-tags">
+          <span class="topic-tag weak" *ngFor="let t of weakestTopics">
+            {{ t.topic }} — {{ t.correct }}/{{ t.total }} ({{ t.percent }}%)
+          </span>
+        </div>
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Detailed topic breakdown -->
+    <h3 class="section-title">Detailed topic breakdown</h3>
     <ion-card *ngFor="let row of tosRowView; let i = index">
       <ion-card-header>
         <ion-card-title>Topic {{ i+1 }}: {{ row.topic }}</ion-card-title>
