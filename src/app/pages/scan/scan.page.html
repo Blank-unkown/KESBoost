@@ -19,27 +19,31 @@
       <video #video autoplay muted playsinline class="camera-video"></video>
       <canvas #canvas class="scanner-canvas"></canvas>
       
-      <!-- Scan Overlay Guide -->
+      <!-- Scan Overlay Guide - OpenCV alignment frame (full-screen, auto-capture) -->
       <div class="scan-overlay" *ngIf="!isProcessing">
-        <!-- Sheet + bubble alignment guide -->
         <div class="sheet-guide">
           <div class="sheet-frame">
-            <div class="header-box"></div>
+            <div class="header-box" title="Header area"></div>
             <div class="bubble-column left"></div>
             <div class="bubble-column right"></div>
+            <div class="corner-hint tl-hint">Align corner here</div>
+            <div class="corner-hint tr-hint">Align corner here</div>
+            <div class="corner-hint bl-hint">Align corner here</div>
+            <div class="corner-hint br-hint">Align corner here</div>
           </div>
         </div>
 
-        <div class="corner tl" [class.detected]="detectedMarkers['tl']"></div>
-        <div class="corner tr" [class.detected]="detectedMarkers['tr']"></div>
-        <div class="corner bl" [class.detected]="detectedMarkers['bl']"></div>
-        <div class="corner br" [class.detected]="detectedMarkers['br']"></div>
-        
-        <!-- Auto-capture Progress Ring -->
+        <div class="corner tl" [class.detected]="detectedMarkers['tl']" title="Top-left marker"></div>
+        <div class="corner tr" [class.detected]="detectedMarkers['tr']" title="Top-right marker"></div>
+        <div class="corner bl" [class.detected]="detectedMarkers['bl']" title="Bottom-left marker"></div>
+        <div class="corner br" [class.detected]="detectedMarkers['br']" title="Bottom-right marker"></div>
+
+        <div class="alignment-tip">Keep all 4 black corner squares visible</div>
+
         <div class="progress-container" *ngIf="autoCaptureCount > 0">
           <svg class="progress-svg" viewBox="0 0 100 100">
             <circle class="bg" cx="50" cy="50" r="45"></circle>
-            <circle class="fg" cx="50" cy="50" r="45" 
+            <circle class="fg" cx="50" cy="50" r="45"
               [style.stroke-dashoffset]="283 - (283 * autoCaptureCount / AUTO_CAPTURE_THRESHOLD)">
             </circle>
           </svg>
@@ -55,15 +59,12 @@
       </div>
     </div>
 
-    <div class="controls">
-      <ion-button expand="block" (click)="takePhoto()" color="primary" class="main-capture-btn">
-        <ion-icon name="camera" slot="start"></ion-icon>
-        Snap & Grade
-      </ion-button>
-      
-      <ion-button expand="block" fill="clear" (click)="capture()" [disabled]="isProcessing" color="medium" size="small">
-        <ion-icon name="flash" slot="start"></ion-icon>
-        Try Live Scan
+    <!-- Auto-capture only for live camera; optional gallery import -->
+    <div class="controls auto-mode-note">
+      <span>Auto capture: align sheet and hold steady.</span>
+      <ion-button expand="block" size="small" fill="outline" color="medium" (click)="importFromGallery()">
+        <ion-icon name="images" slot="start"></ion-icon>
+        Import from Gallery
       </ion-button>
     </div>
 
@@ -121,6 +122,12 @@
 
         <div *ngIf="debugMode" class="debug-mini">
           conf: {{ (r.confidence || 0) * 100 | number:'1.0-0' }}%
+          <ng-container *ngIf="r.rawScores">
+            • A: {{ (r.rawScores['A'] || 0) | number:'1.2-2' }}
+            B: {{ (r.rawScores['B'] || 0) | number:'1.2-2' }}
+            C: {{ (r.rawScores['C'] || 0) | number:'1.2-2' }}
+            D: {{ (r.rawScores['D'] || 0) | number:'1.2-2' }}
+          </ng-container>
           <ng-container *ngIf="r.status === 'Invalid' && !r.correctAnswer">
             • no key
           </ng-container>

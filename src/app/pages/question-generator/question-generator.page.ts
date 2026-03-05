@@ -8,6 +8,8 @@ import { httpsCallable } from 'firebase/functions';
 import { firebaseFunctions } from '../../firebase';
 import { TeacherService } from '../../services/teacher.service';
 
+declare const pdfjsLib: any;
+
 @Component({
   selector: 'app-question-generator',
   templateUrl: './question-generator.page.html',
@@ -48,6 +50,7 @@ export class QuestionGeneratorPage implements OnInit {
   isPromptingAI = false;
   isChatOpen = false;
   chatMessages: { role: 'user' | 'gemini'; text: string; ts: number }[] = [];
+  isImportingPdf = false;
 
   constructor(
     private route: ActivatedRoute,
@@ -694,6 +697,149 @@ export class QuestionGeneratorPage implements OnInit {
       }
     } finally {
       this.isGeneratingAI = false;
+    }
+  }
+
+  async onPdfFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement | null;
+    const file = input?.files && input.files.length ? input.files[0] : null;
+    if (!file) {
+      return;
+    }
+
+    // Reset the input so the same file can be selected again if needed.
+    if (input) {
+      input.value = '';
+    }
+
+    await this.generateFromPdf(file);
+  }
+
+  private async generateFromPdf(file: File) {
+    if (this.isImportingPdf) return;
+
+    if (!file.type || !file.type.includes('pdf')) {
+      await this.presentAlert('Please select a PDF file.');
+      return;
+    }
+
+    if (typeof pdfjsLib === 'undefined' || !pdfjsLib || !pdfjsLib.getDocument) {
+      await this.presentAlert(
+        'PDF engine not loaded. Please check your internet connection and reload the app.'
+      );
+      return;
+    }
+
+    this.isImportingPdf = true;
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+
+      const maxPages = Math.min(pdf.numPages || 0, 10);
+      let fullText = '';
+
+      for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageText = (textContent.items || [])
+          .map((it: any) => (typeof it?.str === 'string' ? it.str : ''))
+          .join(' ');
+        fullText += '\n\n' + pageText;
+      }
+
+      const cleaned = fullText.replace(/\s+/g, ' ').trim();
+      if (!cleaned) {
+        await this.presentAlert('Could not read any text from the PDF.');
+        return;
+      }
+
+      const snippet = cleaned.slice(0, 8000);
+      const fn = httpsCallable(
+        firebaseFunctions(),
+        'generateQuestionsWithAI'
+      ) as any;
+
+      // Determine which existing questions are "blank" and should be filled.
+      // We treat a question as blank if it has **no correct answer set yet**
+      // (answer letter missing/invalid), regardless of placeholder question text.
+      const selectedTopicTrimmed = String(this.selectedTopic || '').trim();
+      const blankIndexes: number[] = [];
+      for (let i = 0; i < this.questions.length; i++) {
+        const q = this.questions[i];
+        const isInScope =
+          this.topicViewMode === 'selected' && selectedTopicTrimmed
+            ? String(q.topic || '').trim() === selectedTopicTrimmed
+            : true;
+        const hasAnswer = !!this.normalizeAnswerLetter((q as any).answer);
+        if (isInScope && !hasAnswer) {
+          blankIndexes.push(i);
+        }
+      }
+
+      if (!blankIndexes.length) {
+        await this.presentAlert(
+          'No blank questions to fill. You can clear some questions or regenerate from TOS, then import the PDF again.'
+        );
+        return;
+      }
+
+      const count = blankIndexes.length;
+      const res = await fn({
+        mode: 'mcq',
+        prompt:
+          `Use the following lesson content to create ${count} multiple-choice questions (A–D) ` +
+          `that are appropriate for the subject "${this.subjectName}" and class "${this.className}". ` +
+          `Return structured MCQs with choices A–D and the correct answer letter.\n\n` +
+          snippet,
+        count,
+      });
+
+      const items: any[] = Array.isArray(res?.data?.questions) ? res.data.questions : [];
+      const mapped = items
+        .map((it) => {
+          if (!it || typeof it !== 'object') return null;
+          const qText = String(it?.question || '').trim();
+          const choices = it?.choices && typeof it.choices === 'object' ? it.choices : {};
+          const A = String(choices?.A || '').trim();
+          const B = String(choices?.B || '').trim();
+          const C = String(choices?.C || '').trim();
+          const D = String(choices?.D || '').trim();
+          const ans = this.normalizeAnswerLetter(it?.answer);
+
+          if (!qText || !A || !B || !C || !D || !ans) return null;
+
+          return {
+            question: qText,
+            choices: { A, B, C, D },
+            answer: ans,
+          };
+        })
+        .filter(Boolean) as any[];
+
+      if (!mapped.length) {
+        await this.presentAlert('AI did not return any valid MCQs for this PDF.');
+        return;
+      }
+
+      // Fill only existing blank questions; do not add new ones.
+      const fillCount = Math.min(blankIndexes.length, mapped.length);
+      for (let i = 0; i < fillCount; i++) {
+        const qIndex = blankIndexes[i];
+        const src = mapped[i];
+        const dest = this.questions[qIndex];
+        dest.question = src.question;
+        dest.choices = src.choices;
+        dest.answer = src.answer;
+      }
+
+      this.refreshDisplayQuestions();
+      await this.presentAlert(`Filled ${fillCount} blank question(s) from the PDF lesson.`);
+    } catch (e: any) {
+      const message = e?.message ? String(e.message) : String(e);
+      await this.presentAlert(message || 'Failed to generate questions from PDF.');
+    } finally {
+      this.isImportingPdf = false;
     }
   }
 

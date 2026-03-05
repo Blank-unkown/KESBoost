@@ -20,23 +20,22 @@ export interface BubbleTemplate {
 }
 
 /**
- * PRODUCTION-READY OMR TEMPLATE (50 Questions)
- * Optimized for A4 aspect ratio (800x1131)
+ * ROBUST OMR TEMPLATE (50 Questions) - Optimized for OpenCV scanning
  * 
- * Layout:
- * - 2 Columns of 25 questions each
- * - Column 1: Questions 1-25 (Left)
- * - Column 2: Questions 26-50 (Right)
- * - Header space: 0-250px
- * - Footer space: 1050-1131px (for corner markers)
+ * Layout improvements for reliability:
+ * - Larger corner markers (55x55) - easier contour detection
+ * - Increased bubble radius (16px) - better fill detection
+ * - More spacing between bubbles (48px) - reduces bleed/ambiguity
+ * - Increased row height (32px) - cleaner separation
+ * - Sheet size: 800 x 1131 (A4 aspect ratio)
  */
 
-const START_Y = 315; // Lowered to make room for column labels
-const ROW_HEIGHT = 30;
-const COL1_X = 160;
-const COL2_X = 520;
-const BUBBLE_GAP = 45;
-const RADIUS = 14;
+const START_Y = 320;
+const ROW_HEIGHT = 32;
+const COL1_X = 158;
+const COL2_X = 518;
+const BUBBLE_GAP = 48;
+const RADIUS = 16;
 
 function generateBubbles(): BubbleTemplate[] {
   const template: BubbleTemplate[] = [];

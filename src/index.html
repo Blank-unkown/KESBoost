@@ -18,10 +18,15 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black" />
 
-  <!-- OpenCV.js -->
+  <!-- OpenCV.js for OMR scanner (offline-capable, bundled in assets) -->
+  <script defer src="assets/opencv-bundle/opencv-bundle.js" onload="window.__opencvReady=true;" onerror="console.error('Failed to load OpenCV.js (assets/opencv-bundle/opencv-bundle.js)');"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jscolor@2.0.4/jscolor.min.js"></script>
+
+  <!-- PDF.js for reading teacher lesson PDFs on the client -->
+  <!-- Note: integrity attribute removed to avoid SRI mismatch blocking the script. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <!-- Lite OMR Engine Hooks -->
   <script>

@@ -10,6 +10,8 @@ import { TeacherService } from '../../services/teacher.service';
 import { LocalDataService, ScannedResult, AnswerEntry, TopicEntry } from '../../services/local-data.service';
 import { bubbles } from '../../data/bubble-template';
 import { OmrLiteService } from '../../services/omr-lite.service';
+import { OmrScannerService } from '../../services/omr-scanner.service';
+import { OpenCvScannerService } from '../../services/opencv-scanner.service';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import jsQR from 'jsqr';
 import type { ClassStudent } from '../../services/teacher.service';
@@ -20,6 +22,7 @@ interface GradingResult {
   correctAnswer: string;
   status: 'Correct' | 'Incorrect' | 'Blank' | 'Invalid';
   confidence?: number;
+  rawScores?: { [key: string]: number };
 }
 
 @Component({
@@ -93,6 +96,8 @@ export class ScanPage implements AfterViewInit, OnDestroy {
     private cameraService: CameraService,
     private teacherService: TeacherService,
     private omrLite: OmrLiteService,
+    private omrScanner: OmrScannerService,
+    private openCvScanner: OpenCvScannerService,
     private route: ActivatedRoute,
     private ngZone: NgZone,
     private alertCtrl: AlertController
@@ -115,7 +120,7 @@ export class ScanPage implements AfterViewInit, OnDestroy {
     await LocalDataService.load();
 
     try {
-      // Start camera and load answer key in parallel for faster ready state.
+      this.openCvScanner.preload();
       await Promise.all([this.startCamera(), this.loadAnswerKey()]);
       this.statusMessage = 'Ready to scan';
       this.isProcessing = false;
@@ -294,8 +299,8 @@ export class ScanPage implements AfterViewInit, OnDestroy {
         }
       }
 
-      // 2) Run OMR grading (also tries to decode our fallback mini-code)
-      const { gradingResults, studentHash } = this.omrLite.processFrame(canvas, this.answerKey);
+      // 2) Run OMR grading (ZipGrade-style: NativeScan/OpenCV on Android, enhanced OmrLite on web)
+      const { gradingResults, studentHash } = await this.omrScanner.processFrame(canvas, this.answerKey);
 
       this.lastCapturedImageData = canvas.toDataURL('image/jpeg', 0.85);
       this.saveSuccess = false;
@@ -348,7 +353,7 @@ export class ScanPage implements AfterViewInit, OnDestroy {
         this.statusMessage = 'Processing photo...';
         
         const img = new Image();
-        img.onload = () => {
+        img.onload = async () => {
           const canvas = document.createElement('canvas');
           canvas.width = img.width;
           canvas.height = img.height;
@@ -373,6 +378,9 @@ export class ScanPage implements AfterViewInit, OnDestroy {
                 }
               }
 
+              // For gallery imports, use the OmrLiteService directly. The source images are
+              // typically high-quality, perfectly aligned exports of the generated sheet,
+              // and the Lite pipeline is very robust for this case.
               const { gradingResults, studentHash } = this.omrLite.processFrame(canvas, this.answerKey);
               this.lastCapturedImageData = canvas.toDataURL('image/jpeg', 0.85);
               this.saveSuccess = false;
@@ -392,9 +400,11 @@ export class ScanPage implements AfterViewInit, OnDestroy {
               });
             } catch (err: any) {
               this.ngZone.run(() => {
-                this.lastError = err.message || 'Photo processing failed';
-                if (err.message.includes('markers')) {
+                this.lastError = err?.message || 'Photo processing failed';
+                if (this.lastError.includes('markers')) {
                   this.lastError = 'Corner markers not detected in photo.';
+                } else if (this.lastError.includes('timed out')) {
+                  this.lastError = 'Processing took too long. Please try again or retake the photo.';
                 }
                 this.isProcessing = false;
                 this.statusMessage = 'Ready to scan';
@@ -408,6 +418,100 @@ export class ScanPage implements AfterViewInit, OnDestroy {
       console.error('Photo error', e);
       this.ngZone.run(() => {
         this.lastError = 'Photo capture cancelled or failed';
+        this.isProcessing = false;
+        this.statusMessage = 'Ready to scan';
+      });
+    }
+  }
+
+  async importFromGallery() {
+    if (this.isProcessing) return;
+    this.isProcessing = true;
+    this.statusMessage = 'Opening gallery...';
+    this.lastError = '';
+
+    try {
+      const image = await Camera.getPhoto({
+        quality: 100,
+        allowEditing: false,
+        resultType: CameraResultType.Uri,
+        source: CameraSource.Photos
+      });
+
+      if (image.webPath) {
+        this.statusMessage = 'Processing photo...';
+
+        const img = new Image();
+        img.onload = async () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            try {
+              const ctx2 = canvas.getContext('2d', { willReadFrequently: true });
+
+              let qrStudentId: number | null = null;
+              if (ctx2) {
+                const imageData = ctx2.getImageData(0, 0, canvas.width, canvas.height);
+                const qr = jsQR(imageData.data, imageData.width, imageData.height);
+                if (qr?.data) {
+                  const parts = String(qr.data).split(':');
+                  if (parts.length >= 4 && parts[0] === 'QR') {
+                    const stuId = Number(parts[3] || 0);
+                    if (Number.isFinite(stuId)) {
+                      qrStudentId = stuId;
+                    }
+                  }
+                }
+              }
+
+              // For gallery imports, use the OmrLiteService directly. Imported sheets are
+              // high-quality exports of the generated template, and the Lite pipeline is
+              // tuned specifically for this case.
+              const { gradingResults, studentHash } = this.omrLite.processFrame(canvas, this.answerKey);
+              this.lastCapturedImageData = canvas.toDataURL('image/jpeg', 0.85);
+              this.saveSuccess = false;
+              this.ngZone.run(() => {
+                this.gradingResults = gradingResults;
+                this.calculateStats();
+                this.showResults = true;
+                this.isProcessing = false;
+                this.statusMessage = 'Ready to scan';
+                void this.loadStudentsForSave().then(() => {
+                  if (qrStudentId != null) {
+                    this.autoAttachByExactId(qrStudentId as number);
+                  } else if (studentHash != null) {
+                    this.autoAttachByHash(studentHash);
+                  }
+                });
+              });
+            } catch (err: any) {
+              this.ngZone.run(() => {
+                this.lastError = err?.message || 'Photo processing failed';
+                if (this.lastError.includes('markers')) {
+                  this.lastError = 'Corner markers not detected in photo.';
+                } else if (this.lastError.includes('timed out')) {
+                  this.lastError = 'Processing took too long. Please try again or use a clearer photo.';
+                }
+                this.isProcessing = false;
+                this.statusMessage = 'Ready to scan';
+              });
+            }
+          }
+        };
+        img.src = image.webPath;
+      } else {
+        this.ngZone.run(() => {
+          this.isProcessing = false;
+          this.statusMessage = 'Ready to scan';
+        });
+      }
+    } catch (e: any) {
+      console.error('Gallery import error', e);
+      this.ngZone.run(() => {
+        this.lastError = 'Gallery selection cancelled or failed';
         this.isProcessing = false;
         this.statusMessage = 'Ready to scan';
       });

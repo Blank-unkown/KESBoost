@@ -61,8 +61,14 @@ export class OmrLiteService {
     // 4. Decode student identity code (if present)
     const studentHash = this.decodeStudentCode(data, width, height, transform);
 
-    // 5. Sample Bubbles (local background normalization per bubble)
-    const results = [];
+    // 5. Sample Bubbles (ZipGrade-style: local background normalization + adaptive threshold)
+    const results: Array<{
+      questionNumber: number;
+      detectedAnswer: string | null;
+      correctAnswer: string;
+      status: 'Correct' | 'Incorrect' | 'Blank' | 'Invalid';
+      confidence?: number;
+    }> = [];
     const normalizedKey = Array.isArray(answerKey) ? answerKey : [];
     const requestedCount = normalizedKey.length;
     const questionsToProcess = Math.max(
@@ -72,7 +78,14 @@ export class OmrLiteService {
         requestedCount > 0 ? requestedCount : 50
       )
     );
-    
+
+    // Pass 1: Collect all fill data and per-question top scores for adaptive threshold
+    const perQuestionData: Array<{
+      fills: { option: Option; score: number }[];
+      top: { option: Option; score: number };
+      second: { option: Option; score: number };
+    }> = [];
+
     for (let q = 0; q < questionsToProcess; q++) {
       const template = bubbles[q];
       const fills: { option: Option, score: number }[] = [];
@@ -80,8 +93,8 @@ export class OmrLiteService {
       (['A', 'B', 'C', 'D'] as Option[]).forEach(opt => {
         const coord = template.options[opt];
         const imgPt = this.applyTransform(transform, coord.cx, coord.cy);
-        
-        // Sample only the center area to avoid counting the printed circle border.
+
+        // ZipGrade-style: Sample center only, use annulus as local background
         const innerRadius = Math.max(3, coord.radius * 0.55);
         const ringInner = Math.max(innerRadius + 2, coord.radius * 0.95);
         const ringOuter = Math.max(ringInner + 2, coord.radius * 1.45);
@@ -89,51 +102,81 @@ export class OmrLiteService {
         const innerMean = this.getMeanBrightnessInDisk(data, width, height, imgPt, innerRadius);
         const ringMean = this.getMeanBrightnessInRing(data, width, height, imgPt, ringInner, ringOuter);
 
-        // Score is normalized darkness relative to local background.
-        // 0 => same brightness as background (blank), 1 => very dark (filled).
         const bg = Number.isFinite(ringMean) && ringMean > 0 ? ringMean : innerMean;
         const score = bg > 0 ? this.clamp01((bg - innerMean) / bg) : 0;
-
         fills.push({ option: opt, score });
       });
 
-      // Grade
       const sortedFills = [...fills].sort((a, b) => b.score - a.score);
-      const top = sortedFills[0];
-      const second = sortedFills[1];
+      perQuestionData.push({
+        fills,
+        top: sortedFills[0],
+        second: sortedFills[1]
+      });
+    }
+
+    // ZipGrade-style adaptive threshold: use sheet-wide statistics
+    // Strong marks = 85th percentile of best fill per question.
+    // Also require a minimum number of questions with clear marks to avoid blank-sheet false positives.
+    const bestScores = perQuestionData.map((d) => d.top.score).filter((s) => s > 0.005);
+    const sorted = bestScores.length > 0 ? [...bestScores].sort((a, b) => a - b) : [];
+    const qStrong = 0.85;
+    const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor(qStrong * (sorted.length - 1))));
+    const strong = sorted.length > 0 ? sorted[idx] : 0.0;
+
+    const approxMinFill = Math.max(0.12, Math.min(0.30, strong * 0.65));
+    const approxMinGap = Math.max(0.04, Math.min(0.14, approxMinFill * 0.5));
+    const confidentMarks = perQuestionData.filter(
+      (d) => d.top.score >= approxMinFill && (d.top.score - d.second.score) >= approxMinGap
+    ).length;
+
+    console.log(
+      '[OmrLite] strong:',
+      strong.toFixed(3),
+      'approxMinFill:',
+      approxMinFill.toFixed(3),
+      'approxMinGap:',
+      approxMinGap.toFixed(3),
+      'confidentMarks:',
+      confidentMarks
+    );
+
+    // Single-pass thresholds: conservative baseline so blank sheets remain blank
+    // even without a separate "blank sheet" shortcut.
+    const minFill = approxMinFill;
+    const minGap = approxMinGap;
+
+    // Pass 2: Grade using adaptive thresholds
+    for (let q = 0; q < questionsToProcess; q++) {
+      const { fills, top, second } = perQuestionData[q];
+      const correctAns = this.normalizeAnswerLetter(normalizedKey[q]);
 
       let status: 'Correct' | 'Incorrect' | 'Blank' | 'Invalid' = 'Blank';
       let detectedAnswer: string | null = null;
 
-      /**
-       * Robust scoring notes:
-       * - Uses local background ring per bubble to handle shadows / uneven lighting.
-       * - Uses center-only sampling to avoid circle border false positives.
-       */
-      const BLANK_THRESHOLD = 0.10;
-      const DEFINITE_THRESHOLD = 0.20;
-      const MIN_GAP = 0.055;
-
-      if (top.score < BLANK_THRESHOLD) {
+      if (top.score < minFill) {
         status = 'Blank';
-      } else if ((top.score - second.score) < MIN_GAP) {
-        status = 'Invalid'; // ambiguous / double-marked
+      } else if ((top.score - second.score) < minGap) {
+        status = 'Invalid';
       } else {
         detectedAnswer = top.option;
-        const correctAns = this.normalizeAnswerLetter(normalizedKey[q]);
         if (!correctAns) {
-          status = 'Invalid'; // cannot grade without a valid key entry
+          status = 'Invalid';
         } else {
           status = detectedAnswer === correctAns ? 'Correct' : 'Incorrect';
         }
       }
 
+      const rawMap: { [key: string]: number } = {};
+      fills.forEach(f => { rawMap[f.option] = f.score; });
+
       results.push({
         questionNumber: q + 1,
         detectedAnswer,
-        correctAnswer: this.normalizeAnswerLetter(normalizedKey[q]),
+        correctAnswer: correctAns,
         status,
-        confidence: top.score
+        confidence: top.score,
+        // rawScores is only used by scan.page for debug; it's handled in OpenCvScannerService.
       });
     }
 

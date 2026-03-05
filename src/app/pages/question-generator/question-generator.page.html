@@ -40,6 +40,19 @@
             Generate with AI
           </ion-button>
 
+          <ion-button class="action" color="secondary" [disabled]="isImportingPdf" (click)="pdfInput.click()">
+            <ion-spinner *ngIf="isImportingPdf" name="crescent" style="margin-right: 8px;"></ion-spinner>
+            Import PDF Lesson
+          </ion-button>
+
+          <input
+            #pdfInput
+            type="file"
+            accept="application/pdf"
+            hidden
+            (change)="onPdfFileSelected($event)"
+          />
+
           <ion-button class="action" color="success" (click)="saveQuestions()">
             Save
           </ion-button>
