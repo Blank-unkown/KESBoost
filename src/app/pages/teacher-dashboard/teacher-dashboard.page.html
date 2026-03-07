@@ -69,58 +69,21 @@
       </div>
     </div>
 
-    <!-- Quick Actions -->
-    <div class="quick-actions">
+    <!-- Analytics Overview -->
+    <div class="analytics-section" *ngIf="dashboardData">
       <div class="section-header">
-        <h2>Quick Actions</h2>
+        <h2>Exam Analytics</h2>
       </div>
-      <div class="action-grid">
-        <div class="action-card manage-classes" (click)="goToClasses()">
-          <div class="card-icon-wrapper">
-            <ion-icon name="list" class="card-icon"></ion-icon>
-          </div>
-          <h3>Manage Classes</h3>
-          <p>View and manage your classes</p>
+      <div class="analytics-grid">
+        <div class="analytics-card">
+          <h3>Answer Accuracy</h3>
+          <canvas id="summaryChart"></canvas>
         </div>
-
-        <div class="action-card scan-answers" (click)="goToScan()">
-          <div class="card-icon-wrapper">
-            <ion-icon name="camera" class="card-icon"></ion-icon>
-          </div>
-          <h3>Scan Answers</h3>
-          <p>Scan and process answer sheets</p>
-        </div>
-
-        <div class="action-card view-results" (click)="goToResults()">
-          <div class="card-icon-wrapper">
-            <ion-icon name="bar-chart" class="card-icon"></ion-icon>
-          </div>
-          <h3>View Results</h3>
-          <p>Check scanned results</p>
-        </div>
-
-        <div class="action-card generator" (click)="goToQuestionGenerator()">
-          <div class="card-icon-wrapper">
-            <ion-icon name="create" class="card-icon"></ion-icon>
-          </div>
-          <h3>Question Generator</h3>
-          <p>Create exam questions</p>
-        </div>
-
-        <div class="action-card answer-key" (click)="goToAnswerKey()">
-          <div class="card-icon-wrapper">
-            <ion-icon name="checkmark-circle" class="card-icon"></ion-icon>
-          </div>
-          <h3>Answer Key</h3>
-          <p>Create and manage keys</p>
-        </div>
-
-        <div class="action-card reports">
-          <div class="card-icon-wrapper">
-            <ion-icon name="download" class="card-icon"></ion-icon>
-          </div>
-          <h3>Generate Report</h3>
-          <p>Export performance reports</p>
+        <div class="analytics-card">
+          <h3>Totals</h3>
+          <p><strong>Total Scans:</strong> {{ dashboardData.totalScans || 0 }}</p>
+          <p><strong>Questions Generated:</strong> {{ dashboardData.totalQuestions || 0 }}</p>
+          <p><strong>Average Score:</strong> {{ dashboardData.averageScore | number: '1.1-1' }}%</p>
         </div>
       </div>
     </div>

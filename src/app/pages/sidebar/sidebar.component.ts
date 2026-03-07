@@ -46,6 +46,18 @@ export class SidebarComponent {
     this.navCtrl.navigateRoot(url);
   }
 
+  /**
+   * Results entrypoint from sidebar:
+   * 1) Show class list
+   * 2) From there, teachers can drill into subjects and scans.
+   */
+  async goToResultsRoot() {
+    await this.closeMenu();
+    this.navCtrl.navigateRoot('/class-list', {
+      queryParams: { view: 'results' }
+    } as any);
+  }
+
   async goToSubjects() {
     if (this.activePage === 'subjects') {
       await this.closeMenu();

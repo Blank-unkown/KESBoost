@@ -264,6 +264,29 @@ $border-color: #e5e7eb;
   margin-bottom: 28px;
 }
 
+// Analytics charts under stats
+.analytics-section {
+  margin-bottom: 28px;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.analytics-card {
+  background: #{$bg-white};
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.analytics-card canvas {
+  width: 100%;
+  max-height: 220px;
+}
+
 .loading-container {
   display: flex;
   align-items: center;

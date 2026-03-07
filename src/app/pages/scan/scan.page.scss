@@ -71,17 +71,19 @@
         border-radius: 6px;
       }
 
-      .bubble-column {
+      .sheet-corner-view {
         position: absolute;
-        top: 24%;
-        bottom: 8%;
-        width: 20%;
-        border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.45);
-        background: radial-gradient(circle at 50% 10%, rgba(255,255,255,0.2), transparent 70%);
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(255, 255, 255, 0.9);
+        border-radius: 6px;
+        box-shadow: 0 0 12px rgba(0, 0, 0, 0.7);
+        pointer-events: none;
 
-        &.left { left: 14%; }
-        &.right { right: 14%; }
+        &.tl { top: -6px; left: -6px; border-right: 0; border-bottom: 0; }
+        &.tr { top: -6px; right: -6px; border-left: 0; border-bottom: 0; }
+        &.bl { bottom: -6px; left: -6px; border-right: 0; border-top: 0; }
+        &.br { bottom: -6px; right: -6px; border-left: 0; border-top: 0; }
       }
 
       .corner-hint {

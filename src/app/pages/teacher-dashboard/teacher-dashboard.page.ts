@@ -8,6 +8,7 @@ import { TeacherService, ClassData } from '../../services/teacher.service';
 import { Gesture, GestureController } from '@ionic/angular';
 import { Preferences } from '@capacitor/preferences';
 import { SidebarComponent } from '../sidebar/sidebar.component';
+import Chart from 'chart.js/auto';
 
 export interface DashboardData {
   totalClasses: number;
@@ -16,6 +17,10 @@ export interface DashboardData {
   averageScore: number;
   classes: ClassData[];
   recentExams?: any[];
+  totalScans?: number;
+  totalQuestions?: number;
+  correctAnswers?: number;
+  totalAnswers?: number;
 }
 
 @Component({
@@ -34,6 +39,7 @@ export class TeacherDashboardPage implements OnInit, AfterViewInit, OnDestroy {
   private gestures: Gesture[] = [];
   private suppressNextClassClick = false;
   private classOrderIds: number[] = [];
+  private summaryChart?: Chart;
 
   @ViewChildren('classCard', { read: ElementRef }) classCards?: QueryList<ElementRef<HTMLElement>>;
 
@@ -87,6 +93,7 @@ export class TeacherDashboardPage implements OnInit, AfterViewInit, OnDestroy {
     try {
       this.classes = await this.teacherService.getClasses();
       this.calculateDashboardData();
+      await this.computeExamAnalytics();
       this.showWelcomeCheck = true;
       setTimeout(() => {
         this.showWelcomeCheck = false;
@@ -120,10 +127,96 @@ export class TeacherDashboardPage implements OnInit, AfterViewInit, OnDestroy {
       totalClasses: this.classes.length,
       totalStudents,
       totalSubjects: subjectSet.size,
-      averageScore: 0, // To be fetched from exam results if available
-      classes: displayClasses, // Show first 5 classes
-      recentExams: []
+      averageScore: 0,
+      classes: displayClasses,
+      recentExams: [],
+      totalScans: 0,
+      totalQuestions: 0,
+      correctAnswers: 0,
+      totalAnswers: 0
     };
+  }
+
+  private async computeExamAnalytics(): Promise<void> {
+    if (!this.classes || !this.classes.length) return;
+    let totalScans = 0;
+    let totalQuestions = 0;
+    let correctAnswers = 0;
+    let totalAnswers = 0;
+
+    for (const cls of this.classes) {
+      for (const sub of cls.subjects || []) {
+        try {
+          const res = await this.teacherService.loadSubjectResults(cls.id, sub.id);
+          if (!res.success || !res.results.length) continue;
+
+          totalScans += res.results.length;
+          res.results.forEach(r => {
+            totalQuestions += Number(r.total) || 0;
+            (r.answers || []).forEach(a => {
+              totalAnswers++;
+              if (a.correct) correctAnswers++;
+            });
+          });
+        } catch (err) {
+          console.error('computeExamAnalytics error for subject', cls.id, sub.id, err);
+        }
+      }
+    }
+
+    const avgScore =
+      totalAnswers > 0 ? (correctAnswers / totalAnswers) * 100 : 0;
+
+    if (this.dashboardData) {
+      this.dashboardData = {
+        ...this.dashboardData,
+        averageScore: avgScore,
+        totalScans,
+        totalQuestions,
+        correctAnswers,
+        totalAnswers
+      };
+
+      this.renderSummaryChart();
+    }
+  }
+
+  private renderSummaryChart(): void {
+    if (!this.dashboardData) return;
+    const total = this.dashboardData.totalAnswers || 0;
+    if (total <= 0) return;
+    const correct = this.dashboardData.correctAnswers || 0;
+    const other = total - correct;
+
+    // Delay to ensure canvas is in the DOM
+    setTimeout(() => {
+      const canvas = document.getElementById('summaryChart') as HTMLCanvasElement | null;
+      if (!canvas) return;
+
+      if (this.summaryChart) {
+        this.summaryChart.destroy();
+      }
+
+      this.summaryChart = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+          labels: ['Correct', 'Other'],
+          datasets: [
+            {
+              data: [correct, other],
+              backgroundColor: ['#10b981', '#e5e7eb'],
+            }
+          ]
+        },
+        options: {
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    }, 0);
   }
 
 

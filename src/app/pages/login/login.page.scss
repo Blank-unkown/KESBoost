@@ -16,16 +16,14 @@
 
 .login-content {
   --background: linear-gradient(180deg, #f8f9fa 0%, #f0f2f5 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
+  /* Let content start below header and scroll naturally on small screens */
 }
 
 .login-container {
   width: 100%;
   max-width: 400px;
-  padding: 20px;
+  padding: 20px 20px 32px;
+  margin: 0 auto;
 }
 
 .logo-section {

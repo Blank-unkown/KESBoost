@@ -24,8 +24,13 @@
         <div class="sheet-guide">
           <div class="sheet-frame">
             <div class="header-box" title="Header area"></div>
-            <div class="bubble-column left"></div>
-            <div class="bubble-column right"></div>
+
+            <!-- Perfect-square viewfinder around the virtual sheet -->
+            <div class="sheet-corner-view tl"></div>
+            <div class="sheet-corner-view tr"></div>
+            <div class="sheet-corner-view bl"></div>
+            <div class="sheet-corner-view br"></div>
+
             <div class="corner-hint tl-hint">Align corner here</div>
             <div class="corner-hint tr-hint">Align corner here</div>
             <div class="corner-hint bl-hint">Align corner here</div>
@@ -38,7 +43,9 @@
         <div class="corner bl" [class.detected]="detectedMarkers['bl']" title="Bottom-left marker"></div>
         <div class="corner br" [class.detected]="detectedMarkers['br']" title="Bottom-right marker"></div>
 
-        <div class="alignment-tip">Keep all 4 black corner squares visible</div>
+        <div class="alignment-tip">
+          Fill the whole camera view with the sheet and keep all 4 black corner squares visible.
+        </div>
 
         <div class="progress-container" *ngIf="autoCaptureCount > 0">
           <svg class="progress-svg" viewBox="0 0 100 100">
@@ -61,7 +68,10 @@
 
     <!-- Auto-capture only for live camera; optional gallery import -->
     <div class="controls auto-mode-note">
-      <span>Auto capture: align sheet and hold steady.</span>
+      <span>Auto capture: fill the frame with the sheet and hold the phone steady.</span>
+      <div style="font-size: 12px; opacity: 0.8; margin-top: 4px;">
+        Use bright, even lighting and keep the camera roughly parallel to the page.
+      </div>
       <ion-button expand="block" size="small" fill="outline" color="medium" (click)="importFromGallery()">
         <ion-icon name="images" slot="start"></ion-icon>
         Import from Gallery

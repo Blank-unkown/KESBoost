@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { NavController, IonContent, ToastController, MenuController, AlertController } from '@ionic/angular';
+import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { IonicModule } from '@ionic/angular';
@@ -22,8 +23,12 @@ export class ClassListPage implements OnInit {
   showAddForm = false;
   currentUser: User | null = null;
 
+  // When navigated from sidebar "Results", we use this to change navigation behavior.
+  viewMode: 'manage' | 'results' = 'manage';
+
   constructor(
     private navCtrl: NavController,
+    private route: ActivatedRoute,
     private teacherService: TeacherService,
     private toastController: ToastController,
     private authService: AuthService,
@@ -63,6 +68,10 @@ export class ClassListPage implements OnInit {
   }
 
   async ngOnInit() {
+    const view = this.route.snapshot.queryParamMap.get('view');
+    if (view === 'results') {
+      this.viewMode = 'results';
+    }
     await this.loadClasses();
   }
 
@@ -135,6 +144,14 @@ export class ClassListPage implements OnInit {
 
   goToSubjects(classId: number) {
     this.navCtrl.navigateForward(`/subject-list/${classId}`);
+  }
+
+  goToResultsForClass(classId: number) {
+    // From the Results entrypoint, drill into this class's subjects; subjects page
+    // already has a "Scans" button to show all previous scanned results.
+    this.navCtrl.navigateForward(`/subject-list/${classId}`, {
+      queryParams: { view: 'results' }
+    } as any);
   }
 
   private async showToast(message: string, color: string) {
